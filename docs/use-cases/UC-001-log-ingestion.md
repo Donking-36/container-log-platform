@@ -1,6 +1,6 @@
 # UC-001：容器日志采集与分类存储
 
-> 文档状态：待评审
+> 文档状态：已评审
 >
 > 优先级：Must
 >
@@ -58,7 +58,7 @@ log-producer
 规范化后事件至少应具备：
 
 ```text
-event_id
+source_event_id（可选）
 container_name
 service
 level
@@ -82,7 +82,7 @@ logged_at
 9. API为本次HTTP请求生成或接收request ID。
 10. API校验批次外层结构、每个事件的必要字段、时间格式和正文大小。
 11. API统一日志级别、UTC时间、来源值和可选字段格式。
-12. 对没有稳定`event_id`的事件，API根据ADR-002规定的算法计算幂等键。
+12. API根据ADR-002计算平台`event_id`；存在`source_event_id`时将其作为指纹输入，否则使用稳定来源位置等字段。
 13. API在数据库事务中通过GORM批量写入合法且不存在的事件。
 14. SQLite唯一约束阻止相同`event_id`被重复保存。
 15. API返回接收数、插入数、重复数和拒绝数。
@@ -166,9 +166,9 @@ logged_at
 
 结果：SQLite中不存在半批写入产生的不一致状态；恢复后可重新处理。
 
-### A8：收到重复event_id
+### A8：收到重复来源事件
 
-1. API或SQLite发现`event_id`已经存在。
+1. API为重复来源事件计算出已经存在的平台`event_id`。
 2. 该事件计入`duplicated`，不再次插入。
 3. API仍将已正确处理的批次视为成功，避免永久重试。
 
@@ -194,7 +194,7 @@ logged_at
 
 ## 8. 业务规则
 
-1. `event_id`是存储幂等键，必须具有唯一约束。
+1. 平台`event_id`是存储幂等键，必须具有唯一约束；`source_event_id`只是可选指纹输入。
 2. 日志传输按至少一次语义处理，不假设传输层天然恰好一次。
 3. 未知级别统一为`UNKNOWN`，已知级别统一大写。
 4. 所有内部时间使用UTC，对外使用RFC3339。
@@ -231,9 +231,9 @@ And 可以通过公开查询API查到这些事件
 ### 场景2：重复投递不重复存储
 
 ```gherkin
-Given SQLite中已经存在event_id为event-001的日志
-When 内部接收接口再次收到相同event_id十次
-Then SQLite中event-001仍然只有一条
+Given SQLite中已经存在source_event_id为event-001的来源日志
+When 内部接收接口再次收到相同来源事件十次
+Then SQLite中对应的平台event_id仍然只有一条
 And 批量响应正确报告重复数量
 ```
 
