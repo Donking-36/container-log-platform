@@ -11,7 +11,9 @@ import (
 	"github.com/Donking-36/container-log-platform/internal/config"
 )
 
-func TestServersRunStopsAfterContextCancellation(t *testing.T) {
+func TestServersRunManagesReadinessAndStopsAfterCancellation(
+	t *testing.T,
+) {
 	cfg := config.Default()
 	cfg.PublicAddr = ":0"
 	cfg.InternalAddr = "127.0.0.1:0"
@@ -23,10 +25,17 @@ func TestServersRunStopsAfterContextCancellation(t *testing.T) {
 
 	handler := http.NewServeMux()
 
+	readiness := NewReadiness(
+		func(context.Context) error {
+			return nil
+		},
+	)
+
 	servers := NewServers(
 		cfg,
 		handler,
 		handler,
+		readiness,
 		logger,
 	)
 
@@ -37,6 +46,8 @@ func TestServersRunStopsAfterContextCancellation(t *testing.T) {
 		done <- servers.Run(ctx)
 	}()
 
+	waitUntilReady(t, readiness)
+
 	cancel()
 
 	select {
@@ -46,5 +57,34 @@ func TestServersRunStopsAfterContextCancellation(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Run() did not stop after context cancellation")
+	}
+
+	if readiness.Ready(context.Background()) {
+		t.Fatal("readiness remained true after Run() stopped")
+	}
+}
+
+func waitUntilReady(
+	t *testing.T,
+	readiness *Readiness,
+) {
+	t.Helper()
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	timeout := time.NewTimer(3 * time.Second)
+	defer timeout.Stop()
+
+	for {
+		if readiness.Ready(context.Background()) {
+			return
+		}
+
+		select {
+		case <-ticker.C:
+		case <-timeout.C:
+			t.Fatal("server did not become ready")
+		}
 	}
 }

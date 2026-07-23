@@ -24,6 +24,7 @@ type Servers struct {
 	internal        *http.Server
 	shutdownTimeout time.Duration
 	logger          *slog.Logger
+	readiness       *Readiness
 }
 
 // NewServers 创建公开和内部HTTP Server。
@@ -31,6 +32,7 @@ func NewServers(
 	cfg config.Config,
 	publicHandler http.Handler,
 	internalHandler http.Handler,
+	readiness *Readiness,
 	logger *slog.Logger,
 ) *Servers {
 	return &Servers{
@@ -43,6 +45,7 @@ func NewServers(
 			internalHandler,
 		),
 		shutdownTimeout: cfg.ShutdownTimeout,
+		readiness:       readiness,
 		logger:          logger,
 	}
 }
@@ -68,6 +71,11 @@ func (s *Servers) Run(ctx context.Context) error {
 	go s.serve("public", s.public, errCh)
 	go s.serve("internal", s.internal, errCh)
 
+	s.readiness.SetReady(true)
+
+	// 防止未来给Run增加提前返回路径时遗忘关闭ready。
+	defer s.readiness.SetReady(false)
+
 	var runErr error
 
 	select {
@@ -75,6 +83,9 @@ func (s *Servers) Run(ctx context.Context) error {
 		s.logger.Info("HTTP server shutdown requested")
 	case runErr = <-errCh:
 	}
+
+	// 必须在停止接收请求之前变为未就绪。
+	s.readiness.SetReady(false)
 
 	shutdownErr := s.shutdown()
 

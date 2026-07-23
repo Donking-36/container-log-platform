@@ -11,7 +11,7 @@ type statusResponse struct {
 }
 
 // NewPublicRouter 创建对用户公开的HTTP路由。
-func NewPublicRouter() *gin.Engine {
+func NewPublicRouter(readiness *Readiness) *gin.Engine {
 	router := newRouter()
 
 	router.GET("/healthz", func(c *gin.Context) {
@@ -21,8 +21,18 @@ func NewPublicRouter() *gin.Engine {
 	})
 
 	router.GET("/readyz", func(c *gin.Context) {
-		c.JSON(http.StatusServiceUnavailable, statusResponse{
-			Status: "not_ready",
+		if !readiness.Ready(c.Request.Context()) {
+			c.JSON(
+				http.StatusServiceUnavailable,
+				statusResponse{
+					Status: "not_ready",
+				},
+			)
+			return
+		}
+
+		c.JSON(http.StatusOK, statusResponse{
+			Status: "ready",
 		})
 	})
 
