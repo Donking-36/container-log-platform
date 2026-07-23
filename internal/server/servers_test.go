@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -86,5 +87,48 @@ func waitUntilReady(
 		case <-timeout.C:
 			t.Fatal("server did not become ready")
 		}
+	}
+}
+
+func TestServersRunDoesNotBecomeReadyWhenAddressIsUnavailable(
+	t *testing.T,
+) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserve test address: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = occupied.Close()
+	})
+
+	cfg := config.Default()
+	cfg.PublicAddr = occupied.Addr().String()
+	cfg.InternalAddr = "127.0.0.1:0"
+
+	logger := slog.New(
+		slog.NewTextHandler(io.Discard, nil),
+	)
+
+	readiness := NewReadiness(
+		func(context.Context) error {
+			return nil
+		},
+	)
+
+	servers := NewServers(
+		cfg,
+		http.NewServeMux(),
+		http.NewServeMux(),
+		readiness,
+		logger,
+	)
+
+	err = servers.Run(context.Background())
+	if err == nil {
+		t.Fatal("Run() returned nil for unavailable address")
+	}
+
+	if readiness.Ready(context.Background()) {
+		t.Fatal("server became ready after listener failure")
 	}
 }

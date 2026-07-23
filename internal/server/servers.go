@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -66,14 +67,52 @@ func newHTTPServer(
 
 // Run 启动两个Server，并等待关闭信号或运行错误。
 func (s *Servers) Run(ctx context.Context) error {
+	publicListener, err := net.Listen("tcp", s.public.Addr)
+	if err != nil {
+		return fmt.Errorf(
+			"listen on public HTTP address %q: %w",
+			s.public.Addr,
+			err,
+		)
+	}
+
+	internalListener, err := net.Listen("tcp", s.internal.Addr)
+	if err != nil {
+		closeErr := publicListener.Close()
+
+		return errors.Join(
+			fmt.Errorf(
+				"listen on internal HTTP address %q: %w",
+				s.internal.Addr,
+				err,
+			),
+			closeErr,
+		)
+	}
+
+	// 即使后续流程提前返回，也确保两个监听器被关闭。
+	defer func() {
+		_ = publicListener.Close()
+		_ = internalListener.Close()
+	}()
+
 	errCh := make(chan error, 2)
 
-	go s.serve("public", s.public, errCh)
-	go s.serve("internal", s.internal, errCh)
+	go s.serve(
+		"public",
+		s.public,
+		publicListener,
+		errCh,
+	)
+	go s.serve(
+		"internal",
+		s.internal,
+		internalListener,
+		errCh,
+	)
 
+	// 两个端口均成功绑定后，才能标记ready。
 	s.readiness.SetReady(true)
-
-	// 防止未来给Run增加提前返回路径时遗忘关闭ready。
 	defer s.readiness.SetReady(false)
 
 	var runErr error
@@ -84,7 +123,6 @@ func (s *Servers) Run(ctx context.Context) error {
 	case runErr = <-errCh:
 	}
 
-	// 必须在停止接收请求之前变为未就绪。
 	s.readiness.SetReady(false)
 
 	shutdownErr := s.shutdown()
@@ -99,15 +137,16 @@ func (s *Servers) Run(ctx context.Context) error {
 func (s *Servers) serve(
 	name string,
 	httpServer *http.Server,
+	listener net.Listener,
 	errCh chan<- error,
 ) {
 	s.logger.Info(
 		"HTTP server listening",
 		"server", name,
-		"address", httpServer.Addr,
+		"address", listener.Addr().String(),
 	)
 
-	err := httpServer.ListenAndServe()
+	err := httpServer.Serve(listener)
 
 	if errors.Is(err, http.ErrServerClosed) {
 		errCh <- nil
