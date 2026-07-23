@@ -58,3 +58,4 @@ jobs:
 
       - name: Build API
         run: go build -o /tmp/container-log-platform-api ./cmd/api
+        
