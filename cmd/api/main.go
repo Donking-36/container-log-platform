@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/Donking-36/container-log-platform/internal/config"
+	"github.com/Donking-36/container-log-platform/internal/repository"
 	"github.com/Donking-36/container-log-platform/internal/server"
 )
 
@@ -29,13 +30,51 @@ func run(logger *slog.Logger) int {
 		return 1
 	}
 
-	publicRouter := server.NewPublicRouter()
+	gormDB, err := repository.OpenSQLite(cfg.DatabasePath)
+	if err != nil {
+		logger.Error(
+			"failed to open SQLite database",
+			"error", err,
+		)
+		return 1
+	}
+
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		logger.Error(
+			"failed to access SQLite connection pool",
+			"error", err,
+		)
+		return 1
+	}
+
+	defer func() {
+		if err := sqlDB.Close(); err != nil {
+			logger.Error(
+				"failed to close SQLite database",
+				"error", err,
+			)
+		}
+	}()
+
+	if err := repository.Migrate(gormDB); err != nil {
+		logger.Error(
+			"failed to migrate SQLite database",
+			"error", err,
+		)
+		return 1
+	}
+
+	readiness := server.NewReadiness(sqlDB.PingContext)
+
+	publicRouter := server.NewPublicRouter(readiness)
 	internalRouter := server.NewInternalRouter()
 
 	httpServers := server.NewServers(
 		cfg,
 		publicRouter,
 		internalRouter,
+		readiness,
 		logger,
 	)
 

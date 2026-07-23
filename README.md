@@ -16,7 +16,7 @@
 - HTTP Server 优雅停机
 - Go 单元测试与基础 CI
 
-SQLite、日志接收、查询统计、Filebeat、Logstash 和 Compose 将在后续功能分支中实现。
+SQLite数据层和动态就绪检查已经实现；日志接收、查询统计、Filebeat、Logstash和Compose将在后续功能分支中实现。
 
 ## 数据链路
 
@@ -84,7 +84,7 @@ go run ./cmd/api
 | Server | 接口 | 当前行为 |
 |---|---|---|
 | Public `:8080` | `GET /healthz` | 返回 HTTP 200，表示进程存活 |
-| Public `:8080` | `GET /readyz` | 当前返回 HTTP 503，等待 SQLite 接入 |
+| Public `:8080` | `GET /readyz` | SQLite可访问且服务正在接收流量时返回HTTP 200，否则返回HTTP 503 |
 | Internal `:8081` | 日志接收接口 | 尚未实现 |
 
 本地验证：
