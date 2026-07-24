@@ -16,6 +16,22 @@ type fakeLogBatchInserter struct {
 	logs     []model.Log
 }
 
+type fakeTemporaryRepositoryError struct {
+	cause error
+}
+
+func (e *fakeTemporaryRepositoryError) Error() string {
+	return e.cause.Error()
+}
+
+func (e *fakeTemporaryRepositoryError) Unwrap() error {
+	return e.cause
+}
+
+func (e *fakeTemporaryRepositoryError) Temporary() bool {
+	return true
+}
+
 func (f *fakeLogBatchInserter) InsertBatch(
 	_ context.Context,
 	logs []model.Log,
@@ -634,6 +650,90 @@ func TestIngestionServiceIngestBatchReturnsRepositoryError(
 		)
 	}
 }
+
+func TestIngestionServiceClassifiesTemporaryRepositoryError(
+	t *testing.T,
+) {
+	tests := []struct {
+		name   string
+		ingest func(*IngestionService) (IngestResult, error)
+	}{
+		{
+			name: "single event",
+			ingest: func(
+				service *IngestionService,
+			) (IngestResult, error) {
+				return service.IngestOne(
+					context.Background(),
+					validServiceEventInput(),
+				)
+			},
+		},
+		{
+			name: "batch",
+			ingest: func(
+				service *IngestionService,
+			) (IngestResult, error) {
+				return service.IngestBatch(
+					context.Background(),
+					[]ingestion.EventInput{
+						serviceEventInputWithID("event-001"),
+					},
+				)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cause := errors.New("database is locked")
+			repositoryErr := &fakeTemporaryRepositoryError{
+				cause: cause,
+			}
+			repo := &fakeLogBatchInserter{
+				err: repositoryErr,
+			}
+
+			ingestionService, err := NewIngestionService(
+				repo,
+				64*1024,
+			)
+			if err != nil {
+				t.Fatalf(
+					"NewIngestionService() error: %v",
+					err,
+				)
+			}
+
+			result, err := tt.ingest(ingestionService)
+
+			if !errors.Is(
+				err,
+				ErrTemporarilyUnavailable,
+			) {
+				t.Fatalf(
+					"error = %v, want temporary unavailable",
+					err,
+				)
+			}
+
+			if !errors.Is(err, cause) {
+				t.Fatalf(
+					"error = %v, want wrapped cause",
+					err,
+				)
+			}
+
+			if result != (IngestResult{}) {
+				t.Fatalf(
+					"result = %+v, want zero result",
+					result,
+				)
+			}
+		})
+	}
+}
+
 func serviceEventInputWithID(
 	sourceEventID string,
 ) ingestion.EventInput {

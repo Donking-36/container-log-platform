@@ -8,23 +8,33 @@ import (
 	"syscall"
 
 	"github.com/Donking-36/container-log-platform/internal/config"
+	"github.com/Donking-36/container-log-platform/internal/handler"
 	"github.com/Donking-36/container-log-platform/internal/repository"
 	"github.com/Donking-36/container-log-platform/internal/server"
+	"github.com/Donking-36/container-log-platform/internal/service"
+	"github.com/gin-gonic/gin"
 )
 
 const version = "dev"
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(
+		slog.NewJSONHandler(os.Stdout, nil),
+	).With("service", "api")
 
 	os.Exit(run(logger))
 }
 
 func run(logger *slog.Logger) int {
+	// 关闭Gin自带的非结构化调试输出，
+	// 运行日志统一交给slog中间件。
+	gin.SetMode(gin.ReleaseMode)
+
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error(
 			"failed to load application configuration",
+			"event", "service_start",
 			"error", err,
 		)
 		return 1
@@ -34,6 +44,7 @@ func run(logger *slog.Logger) int {
 	if err != nil {
 		logger.Error(
 			"failed to open SQLite database",
+			"event", "database_error",
 			"error", err,
 		)
 		return 1
@@ -43,6 +54,7 @@ func run(logger *slog.Logger) int {
 	if err != nil {
 		logger.Error(
 			"failed to access SQLite connection pool",
+			"event", "database_error",
 			"error", err,
 		)
 		return 1
@@ -52,6 +64,7 @@ func run(logger *slog.Logger) int {
 		if err := sqlDB.Close(); err != nil {
 			logger.Error(
 				"failed to close SQLite database",
+				"event", "database_error",
 				"error", err,
 			)
 		}
@@ -60,6 +73,44 @@ func run(logger *slog.Logger) int {
 	if err := repository.Migrate(gormDB); err != nil {
 		logger.Error(
 			"failed to migrate SQLite database",
+			"event", "database_error",
+			"error", err,
+		)
+		return 1
+	}
+
+	logRepository, err := repository.NewLogRepository(gormDB)
+	if err != nil {
+		logger.Error(
+			"failed to create log repository",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
+
+	logIngestionService, err := service.NewIngestionService(
+		logRepository,
+		cfg.MaxLogMessageBytes,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log ingestion service",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
+
+	logIngestionHandler, err := handler.NewIngestionHandler(
+		logIngestionService,
+		cfg.MaxIngestBodyBytes,
+		cfg.MaxIngestBatchSize,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log ingestion handler",
+			"event", "service_start",
 			"error", err,
 		)
 		return 1
@@ -67,8 +118,23 @@ func run(logger *slog.Logger) int {
 
 	readiness := server.NewReadiness(sqlDB.PingContext)
 
-	publicRouter := server.NewPublicRouter(readiness)
-	internalRouter := server.NewInternalRouter()
+	publicRouter := server.NewPublicRouter(
+		readiness,
+		logger,
+	)
+	internalRouter, err := server.NewInternalRouter(
+		logIngestionHandler,
+		readiness,
+		logger,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create internal router",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
 
 	httpServers := server.NewServers(
 		cfg,
@@ -87,6 +153,7 @@ func run(logger *slog.Logger) int {
 
 	logger.Info(
 		"container log platform API starting",
+		"event", "service_start",
 		"version", version,
 		"app_env", cfg.AppEnv,
 		"public_addr", cfg.PublicAddr,
@@ -96,12 +163,16 @@ func run(logger *slog.Logger) int {
 	if err := httpServers.Run(ctx); err != nil {
 		logger.Error(
 			"container log platform API stopped with error",
+			"event", "service_shutdown",
 			"error", err,
 		)
 		return 1
 	}
 
-	logger.Info("container log platform API stopped")
+	logger.Info(
+		"container log platform API stopped",
+		"event", "service_shutdown",
+	)
 
 	return 0
 }

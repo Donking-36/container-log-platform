@@ -14,6 +14,8 @@ func TestDefault(t *testing.T) {
 		LogLevel:           "info",
 		ShutdownTimeout:    10 * time.Second,
 		MaxLogMessageBytes: 64 * 1024,
+		MaxIngestBodyBytes: 16 * 1024 * 1024,
+		MaxIngestBatchSize: 1000,
 		DefaultPageSize:    20,
 		MaxPageSize:        100,
 	}
@@ -65,6 +67,18 @@ func TestConfigValidateRejectsInvalidValues(t *testing.T) {
 			},
 		},
 		{
+			name: "non-positive ingestion body limit",
+			mutate: func(cfg *Config) {
+				cfg.MaxIngestBodyBytes = 0
+			},
+		},
+		{
+			name: "non-positive ingestion batch size",
+			mutate: func(cfg *Config) {
+				cfg.MaxIngestBatchSize = 0
+			},
+		},
+		{
 			name: "maximum page size below default",
 			mutate: func(cfg *Config) {
 				cfg.MaxPageSize = cfg.DefaultPageSize - 1
@@ -99,6 +113,8 @@ func TestLoadReadsEnvironment(t *testing.T) {
 		LogLevel:           "debug",
 		ShutdownTimeout:    3 * time.Second,
 		MaxLogMessageBytes: 2048,
+		MaxIngestBodyBytes: 4096,
+		MaxIngestBatchSize: 500,
 		DefaultPageSize:    10,
 		MaxPageSize:        50,
 	}
@@ -123,6 +139,16 @@ func TestLoadRejectsInvalidEnvironment(t *testing.T) {
 			name:  "invalid message size",
 			key:   "MAX_LOG_MESSAGE_BYTES",
 			value: "large",
+		},
+		{
+			name:  "invalid ingestion body size",
+			key:   "MAX_INGEST_BODY_BYTES",
+			value: "large",
+		},
+		{
+			name:  "invalid ingestion batch size",
+			key:   "MAX_INGEST_BATCH_SIZE",
+			value: "many",
 		},
 		{
 			name:  "invalid page size",
@@ -163,6 +189,8 @@ func setValidEnvironment(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "DEBUG")
 	t.Setenv("SHUTDOWN_TIMEOUT", "3s")
 	t.Setenv("MAX_LOG_MESSAGE_BYTES", "2048")
+	t.Setenv("MAX_INGEST_BODY_BYTES", "4096")
+	t.Setenv("MAX_INGEST_BATCH_SIZE", "500")
 	t.Setenv("DEFAULT_PAGE_SIZE", "10")
 	t.Setenv("MAX_PAGE_SIZE", "50")
 }

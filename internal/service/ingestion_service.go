@@ -10,8 +10,13 @@ import (
 	"github.com/Donking-36/container-log-platform/internal/model"
 )
 
-var ErrEmptyBatch = errors.New(
-	"ingest batch: events must not be empty",
+var (
+	ErrEmptyBatch = errors.New(
+		"ingest batch: events must not be empty",
+	)
+	ErrTemporarilyUnavailable = errors.New(
+		"log ingestion service temporarily unavailable",
+	)
 )
 
 // LogBatchInserter描述Service需要的最小存储能力。
@@ -84,8 +89,8 @@ func (s *IngestionService) IngestOne(
 		[]model.Log{entry},
 	)
 	if err != nil {
-		return IngestResult{}, fmt.Errorf(
-			"ingest one log: persist event: %w",
+		return IngestResult{}, wrapPersistenceError(
+			"ingest one log: persist event",
 			err,
 		)
 	}
@@ -169,8 +174,8 @@ func (s *IngestionService) IngestBatch(
 	if err != nil {
 		// 数据库失败时不返回部分统计，
 		// 避免调用方误以为批次已经确认成功。
-		return IngestResult{}, fmt.Errorf(
-			"ingest batch: persist events: %w",
+		return IngestResult{}, wrapPersistenceError(
+			"ingest batch: persist events",
 			err,
 		)
 	}
@@ -190,4 +195,24 @@ func (s *IngestionService) IngestBatch(
 	result.Duplicated = validCount - inserted
 
 	return result, nil
+}
+
+type temporaryError interface {
+	error
+	Temporary() bool
+}
+
+func wrapPersistenceError(
+	operation string,
+	err error,
+) error {
+	var temporary temporaryError
+	if errors.As(err, &temporary) && temporary.Temporary() {
+		err = errors.Join(
+			ErrTemporarilyUnavailable,
+			err,
+		)
+	}
+
+	return fmt.Errorf("%s: %w", operation, err)
 }

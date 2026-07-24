@@ -8,6 +8,7 @@ import (
 
 	"github.com/libtnb/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 const (
@@ -39,7 +40,13 @@ func OpenSQLite(path string) (*gorm.DB, error) {
 
 	db, err := gorm.Open(
 		sqlite.Open(dsn),
-		&gorm.Config{},
+		&gorm.Config{
+			// 运行日志由应用的slog链路统一输出。
+			// 禁止GORM错误日志回显SQL参数中的日志正文。
+			Logger: gormlogger.Default.LogMode(
+				gormlogger.Silent,
+			),
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open SQLite database: %w", err)

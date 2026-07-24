@@ -119,7 +119,10 @@ func (s *Servers) Run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		s.logger.Info("HTTP server shutdown requested")
+		s.logger.Info(
+			"HTTP server shutdown requested",
+			"event", "service_shutdown",
+		)
 	case runErr = <-errCh:
 	}
 
@@ -128,7 +131,10 @@ func (s *Servers) Run(ctx context.Context) error {
 	shutdownErr := s.shutdown()
 
 	if shutdownErr == nil {
-		s.logger.Info("HTTP servers stopped")
+		s.logger.Info(
+			"HTTP servers stopped",
+			"event", "service_shutdown",
+		)
 	}
 
 	return errors.Join(runErr, shutdownErr)
@@ -142,6 +148,7 @@ func (s *Servers) serve(
 ) {
 	s.logger.Info(
 		"HTTP server listening",
+		"event", "service_ready",
 		"server", name,
 		"address", listener.Addr().String(),
 	)
