@@ -121,7 +121,7 @@ flowchart LR
 3. Filebeat解析每条事件并补充`container_name`、`container_id`、`service`、`source`等字段。
 4. Filebeat通过Beats协议把事件发送给Logstash的5044端口。
 5. Logstash规范化字段，以JSON批次调用Gin内部接收接口。
-6. Gin校验事件，计算或读取`event_id`，通过GORM执行幂等写入。
+6. Gin校验事件，并按ADR-002计算平台`event_id`，通过GORM执行幂等写入。
 7. SQLite唯一索引拒绝重复事件。
 8. 用户通过公开REST API查询和统计日志。
 
@@ -142,6 +142,7 @@ flowchart LR
 |---|---|---|---|
 | `id` | INTEGER | 主键、自增 | 数据库内部ID |
 | `event_id` | TEXT | 非空、唯一 | 幂等键 |
+| `source_event_id` | TEXT | 可空 | 来源事件标识，仅作为平台指纹输入 |
 | `container_name` | TEXT | 非空 | 来源容器名 |
 | `container_id` | TEXT | 可空 | Docker容器ID |
 | `service` | TEXT | 非空 | 逻辑服务名 |
@@ -165,9 +166,12 @@ INDEX(logged_at)
 
 ### 5.2 event_id策略
 
-优先使用来源事件自带的稳定`event_id`。来源没有该字段时，由接收层根据稳定来源信息计算SHA-256摘要，候选字段包括：
+数据库中的`event_id`始终由API按照ADR-002计算，不能直接信任来源字符串作为全局唯一键。最终格式为`v1:<SHA-256摘要>`。
+
+来源提供稳定`source_event_id`时，平台使用`service + source_event_id`作为规范指纹输入。来源没有该字段时，使用固定结构中的稳定来源信息计算摘要，包括：
 
 ```text
+agent_id
 container_id
 source
 log_path
@@ -176,7 +180,7 @@ logged_at
 message
 ```
 
-最终算法必须在ADR中固定，并通过“相同事件重复提交只保存一次”的集成测试验证。
+字段规范化方式、顺序和编码以ADR-002为准，并通过“相同来源事件重复提交只保存一次”的集成测试固定算法行为。
 
 ## 6. API设计基线
 
@@ -338,7 +342,7 @@ docker compose up -d --build
 
 标准故障注入流程：
 
-1. 生成1000条具有唯一`event_id`的日志。
+1. 生成1000条具有唯一`source_event_id`的日志。
 2. 等待端到端采集完成。
 3. 验证数据库总数和唯一数均为1000。
 4. 停止API或Logstash。
@@ -704,4 +708,3 @@ CHANGELOG.md
 - Gin文档：<https://gin-gonic.com/en/docs/>
 - GORM文档：<https://gorm.io/docs/>
 - Docker Compose文档：<https://docs.docker.com/compose/>
-
