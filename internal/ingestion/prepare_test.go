@@ -3,6 +3,7 @@ package ingestion
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -121,6 +122,19 @@ func TestPrepareLogBuildsPersistenceModel(t *testing.T) {
 			wantLoggedAt,
 		)
 	}
+	if got.LoggedAt.Location() != time.UTC {
+		t.Fatalf(
+			"LoggedAt location = %v, want UTC",
+			got.LoggedAt.Location(),
+		)
+	}
+
+	if got.IngestedAt.Location() != time.UTC {
+		t.Fatalf(
+			"IngestedAt location = %v, want UTC",
+			got.IngestedAt.Location(),
+		)
+	}
 
 	wantIngestedAt := time.Date(
 		2026,
@@ -146,6 +160,43 @@ func TestPrepareLogBuildsPersistenceModel(t *testing.T) {
 		t.Fatalf(
 			"RawEvent = %v, want compact JSON",
 			got.RawEvent,
+		)
+	}
+	if got.ContainerID == nil ||
+		*got.ContainerID != "container-abc" {
+		t.Fatalf(
+			"ContainerID = %v, want container-abc",
+			got.ContainerID,
+		)
+	}
+
+	if got.Service != "log-producer" {
+		t.Fatalf(
+			"Service = %q, want log-producer",
+			got.Service,
+		)
+	}
+
+	if got.Message != input.Message {
+		t.Fatalf(
+			"Message = %q, want %q",
+			got.Message,
+			input.Message,
+		)
+	}
+
+	if got.LogPath == nil ||
+		*got.LogPath != "/logs/application.log" {
+		t.Fatalf(
+			"LogPath = %v, want /logs/application.log",
+			got.LogPath,
+		)
+	}
+
+	if got.LogOffset == nil || *got.LogOffset != 123 {
+		t.Fatalf(
+			"LogOffset = %v, want 123",
+			got.LogOffset,
 		)
 	}
 }
@@ -237,6 +288,97 @@ func TestPrepareLogPreservesValidationError(
 		t.Fatalf(
 			"error field = %q, want message",
 			validationErr.Field,
+		)
+	}
+}
+func TestPrepareLogAcceptsFallbackFileIdentity(
+	t *testing.T,
+) {
+	logOffset := int64(0)
+
+	input := EventInput{
+		AgentID:       "filebeat-agent-1",
+		ContainerName: "log-producer-1",
+		Service:       "log-producer",
+		Level:         "INFO",
+		Message:       "first file log",
+		Source:        "file",
+		LogPath:       "/logs/application.ndjson",
+		LogOffset:     &logOffset,
+		LoggedAt:      "2026-07-24T10:00:00Z",
+	}
+
+	got, err := PrepareLog(
+		input,
+		testMaxMessageBytes,
+		time.Date(
+			2026,
+			time.July,
+			24,
+			10,
+			0,
+			1,
+			0,
+			time.UTC,
+		),
+	)
+	if err != nil {
+		t.Fatalf(
+			"PrepareLog() returned an error: %v",
+			err,
+		)
+	}
+
+	if got.EventID == "" {
+		t.Fatal("EventID is empty")
+	}
+
+	if got.ContainerID != nil {
+		t.Fatalf(
+			"ContainerID = %v, want nil",
+			got.ContainerID,
+		)
+	}
+
+	if got.LogOffset == nil || *got.LogOffset != 0 {
+		t.Fatalf(
+			"LogOffset = %v, want pointer to 0",
+			got.LogOffset,
+		)
+	}
+}
+func TestNormalizeEventAcceptsMessageAtLimit(
+	t *testing.T,
+) {
+	input := validEventInput()
+	input.Message = strings.Repeat(
+		"a",
+		int(testMaxMessageBytes),
+	)
+
+	_, err := NormalizeEvent(
+		input,
+		testMaxMessageBytes,
+	)
+	if err != nil {
+		t.Fatalf(
+			"NormalizeEvent() returned an error: %v",
+			err,
+		)
+	}
+}
+
+func TestPrepareLogRejectsZeroIngestedAt(
+	t *testing.T,
+) {
+	_, err := PrepareLog(
+		validEventInput(),
+		testMaxMessageBytes,
+		time.Time{},
+	)
+	if err == nil {
+		t.Fatal(
+			"PrepareLog() returned nil error",
 		)
 	}
 }

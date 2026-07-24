@@ -4,8 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+)
+
+var strictRFC3339Pattern = regexp.MustCompile(
+	`^[0-9]{4}-(0[1-9]|1[0-2])-` +
+		`(0[1-9]|[12][0-9]|3[01])` +
+		`T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]` +
+		`(\.[0-9]{1,9})?` +
+		`(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$`,
 )
 
 // ValidationError 表示事件自身存在永久性字段错误。
@@ -82,7 +91,12 @@ func NormalizeEvent(
 			"must not be empty",
 		)
 	}
-
+	if !strictRFC3339Pattern.MatchString(loggedAtText) {
+		return NormalizedEvent{}, invalidField(
+			"logged_at",
+			"must use RFC3339 format",
+		)
+	}
 	loggedAt, err := time.Parse(
 		time.RFC3339Nano,
 		loggedAtText,

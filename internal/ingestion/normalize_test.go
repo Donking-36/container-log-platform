@@ -90,6 +90,20 @@ func TestNormalizeEventNormalizesValidInput(t *testing.T) {
 			wantLoggedAt,
 		)
 	}
+	if got.LoggedAt.Location() != time.UTC {
+		t.Fatalf(
+			"LoggedAt location = %v, want UTC",
+			got.LoggedAt.Location(),
+		)
+	}
+
+	_, offset := got.LoggedAt.Zone()
+	if offset != 0 {
+		t.Fatalf(
+			"LoggedAt zone offset = %d, want 0",
+			offset,
+		)
+	}
 }
 
 func TestNormalizeEventRejectsInvalidInput(t *testing.T) {
@@ -200,6 +214,37 @@ func TestNormalizeEventRejectsInvalidInput(t *testing.T) {
 				input.LogOffset = int64Pointer(0)
 			},
 			wantField: "container_id",
+		},
+		{
+			name: "comma fractional separator",
+			change: func(input *EventInput) {
+				input.LoggedAt =
+					"2026-07-24T10:00:00,123Z"
+			},
+			wantField: "logged_at",
+		},
+		{
+			name: "timezone hour out of range",
+			change: func(input *EventInput) {
+				input.LoggedAt =
+					"2026-07-24T10:00:00+24:00"
+			},
+			wantField: "logged_at",
+		},
+		{
+			name: "timezone minute out of range",
+			change: func(input *EventInput) {
+				input.LoggedAt =
+					"2026-07-24T10:00:00+00:60"
+			},
+			wantField: "logged_at",
+		},
+		{
+			name: "invalid raw event JSON",
+			change: func(input *EventInput) {
+				input.RawEvent = []byte("{")
+			},
+			wantField: "raw_event",
 		},
 	}
 
