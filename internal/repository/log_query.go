@@ -2,11 +2,28 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Donking-36/container-log-platform/internal/model"
 	"gorm.io/gorm"
 )
+
+type missingLogError struct {
+	err error
+}
+
+func (e *missingLogError) Error() string {
+	return e.err.Error()
+}
+
+func (e *missingLogError) Unwrap() error {
+	return e.err
+}
+
+func (e *missingLogError) NotFound() bool {
+	return true
+}
 
 // List按固定条件查询日志，并返回分页前的匹配总数。
 func (r *LogRepository) List(
@@ -92,6 +109,12 @@ func (r *LogRepository) FindByID(
 	if err := r.db.WithContext(ctx).
 		Take(&logEntry, "id = ?", id).
 		Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = &missingLogError{
+				err: err,
+			}
+		}
+
 		return model.Log{}, wrapLogReadError(
 			"find log by ID",
 			err,

@@ -314,6 +314,17 @@ func TestLogRepositoryFindByIDPreservesNotFound(
 			err,
 		)
 	}
+
+	var notFound interface {
+		NotFound() bool
+	}
+	if !errors.As(err, &notFound) ||
+		!notFound.NotFound() {
+		t.Fatalf(
+			"FindByID() error = %v, want not-found marker",
+			err,
+		)
+	}
 }
 
 func TestLogRepositoryListRejectsInvalidPagination(
