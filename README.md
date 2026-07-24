@@ -14,9 +14,14 @@
 - Public/Internal 双 HTTP Server
 - 健康检查与就绪检查基础路由
 - HTTP Server 优雅停机
+- SQLite数据层、迁移、索引和幂等批量写入
+- 日志事件校验、规范化和稳定`event_id`
+- 单条与批量内部日志接收API
+- request ID、结构化请求日志、统一JSON Recovery
+- 内部接收接口的readiness门禁和503响应
 - Go 单元测试与基础 CI
 
-SQLite数据层和动态就绪检查已经实现；日志接收、查询统计、Filebeat、Logstash和Compose将在后续功能分支中实现。
+查询统计、Filebeat、Logstash和Compose将在后续功能分支中实现。
 
 ## 数据链路
 
@@ -85,7 +90,8 @@ go run ./cmd/api
 |---|---|---|
 | Public `:8080` | `GET /healthz` | 返回 HTTP 200，表示进程存活 |
 | Public `:8080` | `GET /readyz` | SQLite可访问且服务正在接收流量时返回HTTP 200，否则返回HTTP 503 |
-| Internal `:8081` | 日志接收接口 | 尚未实现 |
+| Internal `:8081` | `POST /internal/v1/logs` | 校验、规范化并幂等接收单条日志 |
+| Internal `:8081` | `POST /internal/v1/logs/bulk` | 在一个批次中处理插入、重复和永久拒绝事件 |
 
 本地验证：
 
@@ -93,6 +99,21 @@ go run ./cmd/api
 curl --noproxy '*' -i http://127.0.0.1:8080/healthz
 curl --noproxy '*' -i http://127.0.0.1:8080/readyz
 curl --noproxy '*' -i http://127.0.0.1:8081/healthz
+
+curl --noproxy '*' -i \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "source_event_id": "local-example-1",
+    "agent_id": "local-agent",
+    "container_name": "local-producer",
+    "container_id": "local-container",
+    "service": "log-producer",
+    "level": "INFO",
+    "message": "hello from local test",
+    "source": "stdout",
+    "logged_at": "2026-07-24T10:00:00Z"
+  }' \
+  http://127.0.0.1:8081/internal/v1/logs
 ```
 
 ## 质量检查
@@ -110,7 +131,12 @@ CI 还会执行竞态检测和 API 构建。
 ```text
 cmd/api/          API程序入口
 internal/config/  应用配置
+internal/handler/ HTTP解析、状态码和响应DTO
+internal/ingestion/ 日志事件规范化与幂等ID
+internal/middleware/ request ID等HTTP中间件
+internal/repository/ SQLite持久化
 internal/server/  Gin Router与HTTP Server生命周期
+internal/service/ 日志接收业务规则
 data/             SQLite持久化目录
 docs/             需求、用例、架构与ADR
 ```

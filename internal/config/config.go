@@ -17,6 +17,8 @@ type Config struct {
 	LogLevel           string
 	ShutdownTimeout    time.Duration
 	MaxLogMessageBytes int64
+	MaxIngestBodyBytes int64
+	MaxIngestBatchSize int
 	DefaultPageSize    int
 	MaxPageSize        int
 }
@@ -31,6 +33,8 @@ func Default() Config {
 		LogLevel:           "info",
 		ShutdownTimeout:    10 * time.Second,
 		MaxLogMessageBytes: 64 * 1024,
+		MaxIngestBodyBytes: 16 * 1024 * 1024,
+		MaxIngestBatchSize: 1000,
 		DefaultPageSize:    20,
 		MaxPageSize:        100,
 	}
@@ -61,6 +65,22 @@ func Load() (Config, error) {
 	cfg.MaxLogMessageBytes, err = int64FromEnv(
 		"MAX_LOG_MESSAGE_BYTES",
 		cfg.MaxLogMessageBytes,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	cfg.MaxIngestBodyBytes, err = int64FromEnv(
+		"MAX_INGEST_BODY_BYTES",
+		cfg.MaxIngestBodyBytes,
+	)
+	if err != nil {
+		return Config{}, err
+	}
+
+	cfg.MaxIngestBatchSize, err = intFromEnv(
+		"MAX_INGEST_BATCH_SIZE",
+		cfg.MaxIngestBatchSize,
 	)
 	if err != nil {
 		return Config{}, err
@@ -128,6 +148,18 @@ func (c Config) Validate() error {
 
 	if c.MaxLogMessageBytes <= 0 {
 		return fmt.Errorf("MAX_LOG_MESSAGE_BYTES must be greater than zero")
+	}
+
+	if c.MaxIngestBodyBytes <= 0 {
+		return fmt.Errorf(
+			"MAX_INGEST_BODY_BYTES must be greater than zero",
+		)
+	}
+
+	if c.MaxIngestBatchSize <= 0 {
+		return fmt.Errorf(
+			"MAX_INGEST_BATCH_SIZE must be greater than zero",
+		)
 	}
 
 	if c.DefaultPageSize <= 0 {

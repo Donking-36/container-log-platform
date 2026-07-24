@@ -9,7 +9,29 @@ import (
 	"github.com/Donking-36/container-log-platform/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	sqlite3 "modernc.org/sqlite/lib"
 )
+
+type temporaryStorageError struct {
+	err error
+}
+
+func (e *temporaryStorageError) Error() string {
+	return e.err.Error()
+}
+
+func (e *temporaryStorageError) Unwrap() error {
+	return e.err
+}
+
+func (e *temporaryStorageError) Temporary() bool {
+	return true
+}
+
+type sqliteCodeError interface {
+	error
+	Code() int
+}
 
 // LogRepository 负责日志记录的SQLite持久化。
 type LogRepository struct {
@@ -55,11 +77,36 @@ func (r *LogRepository) InsertBatch(
 		Create(&records)
 
 	if result.Error != nil {
-		return 0, fmt.Errorf(
-			"insert log batch: %w",
-			result.Error,
-		)
+		return 0, wrapLogInsertError(result.Error)
 	}
 
 	return result.RowsAffected, nil
+}
+
+func wrapLogInsertError(err error) error {
+	wrapped := fmt.Errorf(
+		"insert log batch: %w",
+		err,
+	)
+
+	if !isTemporarySQLiteError(err) {
+		return wrapped
+	}
+
+	return &temporaryStorageError{
+		err: wrapped,
+	}
+}
+
+func isTemporarySQLiteError(err error) bool {
+	var sqliteErr sqliteCodeError
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+
+	// 扩展错误码的低8位仍是基础SQLite结果码。
+	baseCode := sqliteErr.Code() & 0xff
+
+	return baseCode == sqlite3.SQLITE_BUSY ||
+		baseCode == sqlite3.SQLITE_LOCKED
 }
