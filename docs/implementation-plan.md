@@ -2,7 +2,9 @@
 
 > 文档状态：已确认的实施基线  
 > 制定日期：2026-07-22  
-> 目标版本：v0.1.0  
+> 目标范围：完整MVP（目标稳定版本v1.0.0）
+>
+> 增量发布边界见[版本路线图](release-roadmap.md)
 > 工作方式：Git Flow + Conventional Commits + 文档驱动开发
 
 ## 1. 项目目标
@@ -522,7 +524,7 @@ container-log-platform/
 | P2-10 | Logstash | Beats输入、HTTP批量输出 | 能可靠投递给内部API |
 | P2-11 | Compose | 网络、挂载、健康检查 | 一条命令完成部署 |
 | P2-12 | 质量验证 | 单测、集成、E2E、性能 | 所有量化指标通过 |
-| P2-13 | 发布交付 | 全套文档、CHANGELOG | release流程和v0.1.0完成 |
+| P2-13 | 发布交付 | 全套文档、CHANGELOG | release流程和v1.0.0完成 |
 
 依赖顺序：
 
@@ -569,9 +571,9 @@ feature/integration-tests
 
 ```text
 develop
-→ release/v0.1.0
+→ release/v1.0.0
 → main
-→ tag v0.1.0
+→ tag v1.0.0
 → 合并回develop
 ```
 
@@ -665,10 +667,10 @@ CHANGELOG.md
 
 - 修复测试发现的问题。
 - 完成部署、API、测试、性能和复盘文档。
-- 建立`release/v0.1.0`。
+- 建立`release/v1.0.0`。
 - 执行最终验收并发布标签。
 
-当天出口：`main`包含可交付的`v0.1.0`。
+当天出口：`main`包含可交付的`v1.0.0`。
 
 ## 17. Definition of Done
 
@@ -685,7 +687,7 @@ CHANGELOG.md
 - Compose可在干净环境一键部署。
 - 所有要求的工程文档齐全。
 - Git历史符合Git Flow和提交规范。
-- `release/v0.1.0`完成，`main`存在`v0.1.0`标签。
+- `release/v1.0.0`完成，`main`存在`v1.0.0`标签。
 
 ## 18. 主要风险与应对
 
