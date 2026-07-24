@@ -59,6 +59,7 @@ func TestRequestLoggerWritesStructuredFields(t *testing.T) {
 	)
 	assertLogString(t, entry, "method", http.MethodGet)
 	assertLogString(t, entry, "path", "/items/:id")
+	assertLogString(t, entry, "client_ip", "192.0.2.1")
 	assertLogNumber(t, entry, "status", http.StatusOK)
 	assertLogString(t, entry, "event", "http_request")
 	assertLogString(t, entry, "service", "api")
@@ -75,6 +76,53 @@ func TestRequestLoggerWritesStructuredFields(t *testing.T) {
 			"error field = %#v, want test warning",
 			entry["error"],
 		)
+	}
+}
+
+func TestRemoteClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		want       string
+	}{
+		{
+			name:       "IPv4 with port",
+			remoteAddr: "192.0.2.10:4321",
+			want:       "192.0.2.10",
+		},
+		{
+			name:       "IPv6 with port",
+			remoteAddr: "[2001:db8::10]:4321",
+			want:       "2001:db8::10",
+		},
+		{
+			name:       "IPv4 without port",
+			remoteAddr: "192.0.2.11",
+			want:       "192.0.2.11",
+		},
+		{
+			name:       "invalid value",
+			remoteAddr: "not-an-address",
+			want:       "",
+		},
+		{
+			name:       "hostname with port",
+			remoteAddr: "example.invalid:4321",
+			want:       "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := remoteClientIP(tt.remoteAddr); got != tt.want {
+				t.Fatalf(
+					"remoteClientIP(%q) = %q, want %q",
+					tt.remoteAddr,
+					got,
+					tt.want,
+				)
+			}
+		})
 	}
 }
 

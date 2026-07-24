@@ -13,6 +13,12 @@ type statusResponse struct {
 	Status string `json:"status"`
 }
 
+// PublicLogHandler描述公开Router需要注册的日志查询Handler。
+type PublicLogHandler interface {
+	ListLogs(*gin.Context)
+	GetLog(*gin.Context)
+}
+
 // InternalLogHandler描述内部Router需要注册的日志接收Handler。
 type InternalLogHandler interface {
 	IngestOne(*gin.Context)
@@ -21,9 +27,22 @@ type InternalLogHandler interface {
 
 // NewPublicRouter 创建对用户公开的HTTP路由。
 func NewPublicRouter(
+	logHandler PublicLogHandler,
 	readiness *Readiness,
 	logger *slog.Logger,
-) *gin.Engine {
+) (*gin.Engine, error) {
+	if logHandler == nil {
+		return nil, errors.New(
+			"create public router: log handler must not be nil",
+		)
+	}
+
+	if readiness == nil {
+		return nil, errors.New(
+			"create public router: readiness must not be nil",
+		)
+	}
+
 	router := newRouter(logger)
 
 	router.GET("/healthz", func(c *gin.Context) {
@@ -48,7 +67,14 @@ func NewPublicRouter(
 		})
 	})
 
-	return router
+	readyOnly := router.Group(
+		"/api/v1",
+		requireReady(readiness),
+	)
+	readyOnly.GET("/logs", logHandler.ListLogs)
+	readyOnly.GET("/logs/:id", logHandler.GetLog)
+
+	return router, nil
 }
 
 // NewInternalRouter创建只供Compose内部服务访问的HTTP路由。

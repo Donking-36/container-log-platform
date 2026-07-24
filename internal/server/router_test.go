@@ -19,6 +19,21 @@ type fakeInternalLogHandler struct {
 	batchCalls int
 }
 
+type fakePublicLogHandler struct {
+	listCalls   int
+	detailCalls int
+}
+
+func (h *fakePublicLogHandler) ListLogs(c *gin.Context) {
+	h.listCalls++
+	c.Status(http.StatusNoContent)
+}
+
+func (h *fakePublicLogHandler) GetLog(c *gin.Context) {
+	h.detailCalls++
+	c.Status(http.StatusNoContent)
+}
+
 func (h *fakeInternalLogHandler) IngestOne(c *gin.Context) {
 	h.oneCalls++
 	c.Status(http.StatusNoContent)
@@ -38,9 +53,10 @@ func TestPublicRouterHealthEndpoint(t *testing.T) {
 		},
 	)
 
-	router := NewPublicRouter(
+	router := newPublicRouterForTest(
+		t,
+		&fakePublicLogHandler{},
 		readiness,
-		newTestLogger(),
 	)
 
 	request := httptest.NewRequest(
@@ -109,9 +125,10 @@ func TestPublicRouterReadinessEndpoint(t *testing.T) {
 			)
 			readiness.SetReady(tt.accepting)
 
-			router := NewPublicRouter(
+			router := newPublicRouterForTest(
+				t,
+				&fakePublicLogHandler{},
 				readiness,
-				newTestLogger(),
 			)
 
 			request := httptest.NewRequest(
@@ -142,6 +159,204 @@ func TestPublicRouterReadinessEndpoint(t *testing.T) {
 	}
 }
 
+func TestPublicRouterRegistersLogQueryRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	logHandler := &fakePublicLogHandler{}
+	router := newPublicRouterForTest(
+		t,
+		logHandler,
+		newReadyReadiness(),
+	)
+
+	tests := []struct {
+		name      string
+		path      string
+		wantCalls func() int
+	}{
+		{
+			name: "list query route",
+			path: "/api/v1/logs",
+			wantCalls: func() int {
+				return logHandler.listCalls
+			},
+		},
+		{
+			name: "detail query route",
+			path: "/api/v1/logs/42",
+			wantCalls: func() int {
+				return logHandler.detailCalls
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := tt.wantCalls()
+
+			request := httptest.NewRequest(
+				http.MethodGet,
+				tt.path,
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+
+			router.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusNoContent {
+				t.Fatalf(
+					"status code = %d, want %d",
+					recorder.Code,
+					http.StatusNoContent,
+				)
+			}
+
+			if got := tt.wantCalls(); got != before+1 {
+				t.Fatalf(
+					"handler calls = %d, want %d",
+					got,
+					before+1,
+				)
+			}
+		})
+	}
+}
+
+func TestPublicRouterRejectsQueryRequestsWhenNotReady(
+	t *testing.T,
+) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name          string
+		accepting     bool
+		dependencyErr error
+		path          string
+	}{
+		{
+			name:      "traffic gate is closed",
+			accepting: false,
+			path:      "/api/v1/logs",
+		},
+		{
+			name:          "database is unavailable",
+			accepting:     true,
+			dependencyErr: errors.New("database unavailable"),
+			path:          "/api/v1/logs/42",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			readiness := NewReadiness(
+				func(context.Context) error {
+					return tt.dependencyErr
+				},
+			)
+			readiness.SetReady(tt.accepting)
+
+			logHandler := &fakePublicLogHandler{}
+			router := newPublicRouterForTest(
+				t,
+				logHandler,
+				readiness,
+			)
+
+			request := httptest.NewRequest(
+				http.MethodGet,
+				tt.path,
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+
+			router.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusServiceUnavailable {
+				t.Fatalf(
+					"status code = %d, want %d",
+					recorder.Code,
+					http.StatusServiceUnavailable,
+				)
+			}
+
+			var response middleware.ErrorResponse
+			if err := json.Unmarshal(
+				recorder.Body.Bytes(),
+				&response,
+			); err != nil {
+				t.Fatalf("decode error response: %v", err)
+			}
+
+			if response.Error.Code != "SERVICE_UNAVAILABLE" {
+				t.Fatalf(
+					"error code = %q, want %q",
+					response.Error.Code,
+					"SERVICE_UNAVAILABLE",
+				)
+			}
+
+			headerRequestID := recorder.Header().Get(
+				middleware.RequestIDHeader,
+			)
+			if response.RequestID == "" ||
+				response.RequestID != headerRequestID {
+				t.Fatalf(
+					"body request ID = %q, header request ID = %q",
+					response.RequestID,
+					headerRequestID,
+				)
+			}
+
+			if logHandler.listCalls != 0 ||
+				logHandler.detailCalls != 0 {
+				t.Fatalf(
+					"handler calls = list %d, detail %d; want 0",
+					logHandler.listCalls,
+					logHandler.detailCalls,
+				)
+			}
+		})
+	}
+}
+
+func TestNewPublicRouterRejectsInvalidDependencies(
+	t *testing.T,
+) {
+	tests := []struct {
+		name       string
+		logHandler PublicLogHandler
+		readiness  *Readiness
+	}{
+		{
+			name:      "nil handler",
+			readiness: newReadyReadiness(),
+		},
+		{
+			name:       "nil readiness",
+			logHandler: &fakePublicLogHandler{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router, err := NewPublicRouter(
+				tt.logHandler,
+				tt.readiness,
+				newTestLogger(),
+			)
+			if err == nil {
+				t.Fatal("expected constructor error")
+			}
+
+			if router != nil {
+				t.Fatal(
+					"router must be nil when construction fails",
+				)
+			}
+		})
+	}
+}
+
 func TestInternalRouterDoesNotExposePublicRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -154,21 +369,31 @@ func TestInternalRouterDoesNotExposePublicRoutes(t *testing.T) {
 		t.Fatalf("create internal router: %v", err)
 	}
 
-	request := httptest.NewRequest(
-		http.MethodGet,
+	paths := []string{
 		"/healthz",
-		nil,
-	)
-	recorder := httptest.NewRecorder()
+		"/readyz",
+		"/api/v1/logs",
+		"/api/v1/logs/1",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodGet,
+				path,
+				nil,
+			)
+			recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, request)
+			router.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf(
-			"status code = %d, want %d",
-			recorder.Code,
-			http.StatusNotFound,
-		)
+			if recorder.Code != http.StatusNotFound {
+				t.Fatalf(
+					"status code = %d, want %d",
+					recorder.Code,
+					http.StatusNotFound,
+				)
+			}
+		})
 	}
 }
 
@@ -284,9 +509,10 @@ func TestPublicRouterDoesNotExposeInternalRoutes(t *testing.T) {
 			return nil
 		},
 	)
-	router := NewPublicRouter(
+	router := newPublicRouterForTest(
+		t,
+		&fakePublicLogHandler{},
 		readiness,
-		newTestLogger(),
 	)
 
 	request := httptest.NewRequest(
@@ -412,6 +638,25 @@ func newReadyReadiness() *Readiness {
 	readiness.SetReady(true)
 
 	return readiness
+}
+
+func newPublicRouterForTest(
+	t *testing.T,
+	logHandler PublicLogHandler,
+	readiness *Readiness,
+) *gin.Engine {
+	t.Helper()
+
+	router, err := NewPublicRouter(
+		logHandler,
+		readiness,
+		newTestLogger(),
+	)
+	if err != nil {
+		t.Fatalf("create public router: %v", err)
+	}
+
+	return router
 }
 
 func newTestLogger() *slog.Logger {

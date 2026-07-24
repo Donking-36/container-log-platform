@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -58,6 +60,10 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 			),
 			slog.String("method", c.Request.Method),
 			slog.String("path", path),
+			slog.String(
+				"client_ip",
+				remoteClientIP(c.Request.RemoteAddr),
+			),
 			slog.Int("status", status),
 			slog.Int64(
 				"latency_ms",
@@ -97,4 +103,24 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 			attributes...,
 		)
 	}
+}
+
+func remoteClientIP(remoteAddr string) string {
+	value := strings.TrimSpace(remoteAddr)
+
+	host, _, err := net.SplitHostPort(value)
+	if err == nil {
+		if ip := net.ParseIP(host); ip != nil {
+			return ip.String()
+		}
+
+		return ""
+	}
+
+	value = strings.Trim(value, "[]")
+	if ip := net.ParseIP(value); ip != nil {
+		return ip.String()
+	}
+
+	return ""
 }
