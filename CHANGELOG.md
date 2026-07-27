@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-27
+
 ### 新增
 
 - 实现`GET /api/v1/logs`日志组合查询、稳定排序和分页
@@ -51,5 +53,6 @@
 - 尚未接入 Filebeat 和 Logstash
 - 尚未提供完整的 Docker Compose 部署链路
 
-[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Donking-36/container-log-platform/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Donking-36/container-log-platform/releases/tag/v0.1.0
