@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 实现`GET /api/v1/logs`日志组合查询、稳定排序和分页
+- 实现`GET /api/v1/logs/:id`日志详情查询
+- 增加公开查询路由的readiness门禁
+- 增加查询参数、业务规则、Repository和HTTP集成测试
+- 为结构化HTTP请求日志增加直接连接方`client_ip`
+
+### 安全与兼容性
+
+- 列表响应不返回`raw_event`
+- 详情响应将`raw_event`作为JSON值返回，避免二次编码
+- 拒绝未知、重复和格式错误的查询参数
+- SQLite `BUSY/LOCKED`查询错误返回HTTP 503，其他内部错误返回HTTP 500
+
 ## [0.1.0] - 2026-07-24
 
 ### 新增
