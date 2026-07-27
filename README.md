@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-`v0.1.0` 日志接收核心和 `v0.2.0` 查询与统计能力已经发布。下一步将进入 `v0.3.0` 自动采集与 Compose 开发。
+`v0.1.0` 日志接收核心和 `v0.2.0` 查询与统计能力已经发布，当前正在开发 `v0.3.0` 自动采集与 Compose 能力。
 
 当前已完成：
 
@@ -25,6 +25,7 @@
 - 按日志级别聚合数量与占比
 - 按服务聚合日志数量
 - 统计接口的组合过滤、稳定排序和空结果处理
+- 可配置、可编号并输出三类日志的 `log-producer`
 - Go 单元测试与基础 CI
 
 查询与统计 API 已完成；Filebeat、Logstash 和 Compose 将在 `v0.3.0` 实现。
@@ -173,6 +174,7 @@ docs/             需求、用例、架构与ADR
 - [需求规格](docs/requirements.md)
 - [系统架构](docs/architecture.md)
 - [REST API 使用说明](docs/api.md)
+- [日志生产器说明](docs/log-producer.md)
 - [版本路线图](docs/release-roadmap.md)
 - [架构决策记录](docs/adr/)
 - [核心用例](docs/use-cases/)
