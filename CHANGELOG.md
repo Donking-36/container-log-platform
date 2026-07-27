@@ -8,8 +8,12 @@
 
 - 实现`GET /api/v1/logs`日志组合查询、稳定排序和分页
 - 实现`GET /api/v1/logs/:id`日志详情查询
+- 实现`GET /api/v1/stats/levels`日志级别数量与占比统计
+- 实现`GET /api/v1/stats/services`服务日志数量统计
+- 使用SQLite `GROUP BY`完成统计聚合和稳定排序
 - 增加公开查询路由的readiness门禁
 - 增加查询参数、业务规则、Repository和HTTP集成测试
+- 增加统计Repository、Service、Handler和端到端集成测试
 - 为结构化HTTP请求日志增加直接连接方`client_ip`
 
 ### 安全与兼容性

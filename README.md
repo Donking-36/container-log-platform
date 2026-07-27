@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-`v0.1.0` 日志接收核心已经发布，当前正在开发 `v0.2.0` 查询与统计能力。
+`v0.1.0` 日志接收核心已经发布，`v0.2.0` 查询与统计能力已经实现，当前正在进行验收与发布准备。
 
 当前已完成：
 
@@ -22,9 +22,12 @@
 - 日志列表组合过滤、稳定排序和分页
 - 单条日志详情查询
 - 公开查询接口的readiness门禁和统一错误响应
+- 按日志级别聚合数量与占比
+- 按服务聚合日志数量
+- 统计接口的组合过滤、稳定排序和空结果处理
 - Go 单元测试与基础 CI
 
-统计API将在当前版本的后续功能分支实现；Filebeat、Logstash和Compose将在`v0.3.0`实现。
+查询与统计 API 已完成；Filebeat、Logstash 和 Compose 将在 `v0.3.0` 实现。
 
 ## 数据链路
 
@@ -95,6 +98,8 @@ go run ./cmd/api
 | Public `:8080` | `GET /readyz` | SQLite可访问且服务正在接收流量时返回HTTP 200，否则返回HTTP 503 |
 | Public `:8080` | `GET /api/v1/logs` | 按容器、服务、级别和时间范围组合查询，支持分页 |
 | Public `:8080` | `GET /api/v1/logs/:id` | 按SQLite内部ID查询完整日志详情 |
+| Public `:8080` | `GET /api/v1/stats/levels` | 按日志级别统计数量和占比 |
+| Public `:8080` | `GET /api/v1/stats/services` | 按服务统计日志数量 |
 | Internal `:8081` | `POST /internal/v1/logs` | 校验、规范化并幂等接收单条日志 |
 | Internal `:8081` | `POST /internal/v1/logs/bulk` | 在一个批次中处理插入、重复和永久拒绝事件 |
 
@@ -125,6 +130,12 @@ curl --noproxy '*' \
 
 curl --noproxy '*' \
   http://127.0.0.1:8080/api/v1/logs/1
+
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/stats/levels?container=local-producer'
+
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/stats/services?container=local-producer'
 ```
 
 完整参数和响应字段见[REST API 使用说明](docs/api.md)。
