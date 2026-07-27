@@ -39,6 +39,9 @@ docker.container.labels.com_donking36_container_log_platform_collect
 /var/lib/docker/containers/<container-id>/*.log
 ```
 
+该路径和`format: docker`依赖Docker的`json-file`日志驱动。Compose阶段会为
+`log-producer`显式设置`logging.driver: json-file`，避免宿主机默认日志驱动变化后找不到`*-json.log`文件。
+
 输入采用`filestream`，依次执行：
 
 ```text
@@ -110,7 +113,9 @@ stdout和stderr来源必须由Docker日志的`stream`字段判断；文件来源
 add_error_key: true
 ```
 
-非法JSON会增加`error.type: json`和错误说明，但不会停止后续文件采集。Logstash阶段会识别并拒绝这类事件，防止它们进入内部日志接收API。
+因为解析结果使用`target: producer`，非法JSON会增加
+`producer.error.type: json`和`producer.error.message`，但不会停止后续文件采集。
+Logstash阶段会检查`[producer][error][type]`并拒绝这类事件，防止它们进入内部日志接收API。
 
 ## Registry与磁盘队列
 
@@ -140,6 +145,12 @@ output.logstash:
 
 它通过Beats/Lumberjack协议连接Compose服务名`logstash`的5044端口。Filebeat不配置Elasticsearch、文件或控制台业务输出。
 
+## 监控与关闭
+
+Filebeat在容器内部监听`0.0.0.0:5066`，用于提供自身运行指标和健康状态。Compose不得把5066端口发布到宿主机，只允许内部健康检查访问。
+
+正常停止时，`shutdown_timeout: 10s`允许Filebeat等待正在发布的事件完成；未完成事件仍依赖持久化磁盘队列保存。Filebeat自身运行日志只写入stderr，不作为业务日志输出。
+
 ## 所需挂载与权限
 
 Filebeat容器需要：
@@ -152,7 +163,9 @@ Filebeat容器需要：
 | `producer-logs` | `/logs` | 只读 | NDJSON文件 |
 | `filebeat-data` | `/usr/share/filebeat/data` | 读写 | registry和磁盘队列 |
 
-访问Docker socket通常要求Filebeat容器以root运行。这扩大了容器对宿主机Docker信息的可见性，因此socket和日志目录都保持只读挂载。
+访问Docker socket通常要求Filebeat容器以root运行。需要注意，`:ro`只限制挂载点的文件系统写入，并不会把通过socket发出的Docker API请求变成只读；能够访问socket的进程仍具有很高权限。读取`/var/lib/docker/containers`也意味着Filebeat技术上可以看到全部容器原始日志，采集标签只是业务过滤条件，不是安全隔离边界。
+
+本项目为实现Docker autodiscover接受这一受控风险：socket和日志目录不共享给其他服务，5066不发布到宿主机。生产环境应进一步评估Docker socket代理或其他最小权限采集方案。
 
 ## 配置校验
 
