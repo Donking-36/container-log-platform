@@ -116,12 +116,71 @@ func run(logger *slog.Logger) int {
 		return 1
 	}
 
+	logQueryService, err := service.NewQueryService(
+		logRepository,
+		cfg.DefaultPageSize,
+		cfg.MaxPageSize,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log query service",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
+
+	logQueryHandler, err := handler.NewQueryHandler(
+		logQueryService,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log query handler",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
+	logStatsService, err := service.NewStatsService(
+		logRepository,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log statistics service",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
+
+	logStatsHandler, err := handler.NewStatsHandler(
+		logStatsService,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log statistics handler",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
 	readiness := server.NewReadiness(sqlDB.PingContext)
 
-	publicRouter := server.NewPublicRouter(
+	publicRouter, err := server.NewPublicRouter(
+		logQueryHandler,
+		logStatsHandler,
 		readiness,
 		logger,
 	)
+	if err != nil {
+		logger.Error(
+			"failed to create public router",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
+
 	internalRouter, err := server.NewInternalRouter(
 		logIngestionHandler,
 		readiness,

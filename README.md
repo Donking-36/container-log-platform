@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-正在开发 v0.1.0。
+`v0.1.0` 日志接收核心和 `v0.2.0` 查询与统计能力已经发布。下一步将进入 `v0.3.0` 自动采集与 Compose 开发。
 
 当前已完成：
 
@@ -19,9 +19,15 @@
 - 单条与批量内部日志接收API
 - request ID、结构化请求日志、统一JSON Recovery
 - 内部接收接口的readiness门禁和503响应
+- 日志列表组合过滤、稳定排序和分页
+- 单条日志详情查询
+- 公开查询接口的readiness门禁和统一错误响应
+- 按日志级别聚合数量与占比
+- 按服务聚合日志数量
+- 统计接口的组合过滤、稳定排序和空结果处理
 - Go 单元测试与基础 CI
 
-查询统计、Filebeat、Logstash和Compose将在后续功能分支中实现。
+查询与统计 API 已完成；Filebeat、Logstash 和 Compose 将在 `v0.3.0` 实现。
 
 ## 数据链路
 
@@ -90,6 +96,10 @@ go run ./cmd/api
 |---|---|---|
 | Public `:8080` | `GET /healthz` | 返回 HTTP 200，表示进程存活 |
 | Public `:8080` | `GET /readyz` | SQLite可访问且服务正在接收流量时返回HTTP 200，否则返回HTTP 503 |
+| Public `:8080` | `GET /api/v1/logs` | 按容器、服务、级别和时间范围组合查询，支持分页 |
+| Public `:8080` | `GET /api/v1/logs/:id` | 按SQLite内部ID查询完整日志详情 |
+| Public `:8080` | `GET /api/v1/stats/levels` | 按日志级别统计数量和占比 |
+| Public `:8080` | `GET /api/v1/stats/services` | 按服务统计日志数量 |
 | Internal `:8081` | `POST /internal/v1/logs` | 校验、规范化并幂等接收单条日志 |
 | Internal `:8081` | `POST /internal/v1/logs/bulk` | 在一个批次中处理插入、重复和永久拒绝事件 |
 
@@ -114,7 +124,21 @@ curl --noproxy '*' -i \
     "logged_at": "2026-07-24T10:00:00Z"
   }' \
   http://127.0.0.1:8081/internal/v1/logs
+
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/logs?container=local-producer&level=info&page=1&page_size=20'
+
+curl --noproxy '*' \
+  http://127.0.0.1:8080/api/v1/logs/1
+
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/stats/levels?container=local-producer'
+
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/stats/services?container=local-producer'
 ```
+
+完整参数和响应字段见[REST API 使用说明](docs/api.md)。
 
 ## 质量检查
 
@@ -148,6 +172,8 @@ docs/             需求、用例、架构与ADR
 - [实施方案](docs/implementation-plan.md)
 - [需求规格](docs/requirements.md)
 - [系统架构](docs/architecture.md)
+- [REST API 使用说明](docs/api.md)
+- [版本路线图](docs/release-roadmap.md)
 - [架构决策记录](docs/adr/)
 - [核心用例](docs/use-cases/)
 
