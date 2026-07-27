@@ -1,0 +1,81 @@
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      host: unix:///var/run/docker.sock
+      hints.enabled: false
+      labels.dedot: true
+      templates:
+        - condition:
+            equals:
+              docker.container.labels.com.donking36.container_log_platform.collect: "true"
+          config:
+            - type: filestream
+              id: producer-container-${data.docker.container.id}
+              enabled: true
+              close.on_state_change.removed: false
+              prospector.scanner.fingerprint.length: 64
+              paths:
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              parsers:
+                - container:
+                    stream: all
+                    format: docker
+                - ndjson:
+                    target: producer
+                    add_error_key: true
+                    message_key: message
+                    overwrite_keys: false
+                    expand_keys: false
+              fields:
+                platform:
+                  input_kind: container
+                service:
+                  name: log-producer
+              fields_under_root: true
+
+filebeat.inputs:
+  - type: filestream
+    id: producer-file
+    enabled: true
+    prospector.scanner.fingerprint.length: 64
+    paths:
+      - /logs/*.ndjson
+    parsers:
+      - ndjson:
+          target: producer
+          add_error_key: true
+          message_key: message
+          overwrite_keys: false
+          expand_keys: false
+    fields:
+      platform:
+        input_kind: file
+      service:
+        name: log-producer
+      container:
+        name: ${PRODUCER_CONTAINER_NAME:log-producer}
+    fields_under_root: true
+
+queue.disk:
+  path: ${path.data}/diskqueue
+  max_size: 256MB
+
+output.logstash:
+  hosts:
+    - ${LOGSTASH_HOST:logstash:5044}
+  worker: 1
+  loadbalance: false
+  bulk_max_size: 100
+  backoff.init: 1s
+  backoff.max: 30s
+
+http.enabled: true
+http.host: 0.0.0.0
+http.port: 5066
+
+shutdown_timeout: 10s
+
+logging.level: info
+logging.to_files: false
+logging.to_stderr: true
+logging.metrics.enabled: true
