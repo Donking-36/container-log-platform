@@ -150,7 +150,101 @@ curl --noproxy '*' http://127.0.0.1:8080/api/v1/logs/1
 
 `raw_event` 以原始 JSON 值返回，不会被二次编码成 JSON 字符串；未提供原始事件时返回 `null`。合法 ID 不存在时返回 HTTP 404。
 
-## 4. 查询接口错误码
+## 4. 日志统计
+
+统计接口支持以下可选参数：
+
+| 参数 | 规则 |
+|---|---|
+| `container` | 精确匹配容器名 |
+| `service` | 精确匹配逻辑服务名 |
+| `level` | 不区分输入大小写 |
+| `start` | RFC3339 时间，按 `logged_at` 闭区间过滤 |
+| `end` | RFC3339 时间，按 `logged_at` 闭区间过滤 |
+
+统计接口不支持 `page` 和 `page_size`。未知参数、重复参数、错误时间格式以及 `start` 晚于 `end` 均返回 HTTP 400。
+
+统计由 SQLite 使用 `GROUP BY` 完成，不会先读取全部日志再在 Go 内存中统计。结果按照数量降序排列；数量相同时，按照统计维度名称升序排列。
+
+### 4.1 按日志级别统计
+
+```http
+GET /api/v1/stats/levels
+```
+
+示例：
+
+```bash
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/stats/levels?container=integration-container'
+```
+
+成功响应：
+
+```json
+{
+  "data": [
+    {
+      "level": "ERROR",
+      "count": 2,
+      "percentage": 66.7
+    },
+    {
+      "level": "INFO",
+      "count": 1,
+      "percentage": 33.3
+    }
+  ],
+  "total": 3,
+  "request_id": "example-request-id"
+}
+```
+
+`percentage` 按匹配日志总数计算并四舍五入到一位小数，因此多个比例相加时可能存在轻微舍入误差。
+
+### 4.2 按服务统计
+
+```http
+GET /api/v1/stats/services
+```
+
+示例：
+
+```bash
+curl --noproxy '*' \
+  'http://127.0.0.1:8080/api/v1/stats/services?container=integration-container'
+```
+
+成功响应：
+
+```json
+{
+  "data": [
+    {
+      "service": "integration-service",
+      "count": 2
+    },
+    {
+      "service": "worker-service",
+      "count": 1
+    }
+  ],
+  "total": 3,
+  "request_id": "example-request-id"
+}
+```
+
+没有匹配日志时，两个统计接口都返回 HTTP 200：
+
+```json
+{
+  "data": [],
+  "total": 0,
+  "request_id": "example-request-id"
+}
+```
+
+## 5. 查询与统计接口错误码
 
 | HTTP 状态码 | 错误码 | 含义 |
 |---:|---|---|
@@ -160,7 +254,7 @@ curl --noproxy '*' http://127.0.0.1:8080/api/v1/logs/1
 | 503 | `SERVICE_UNAVAILABLE` | 服务未就绪，或 SQLite 处于 `BUSY/LOCKED` 等临时不可用状态 |
 | 500 | `INTERNAL_ERROR` | 未预期的内部查询错误 |
 
-## 5. 健康检查
+## 6. 健康检查
 
 | 接口 | 成功状态 | 含义 |
 |---|---:|---|

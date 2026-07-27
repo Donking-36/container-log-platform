@@ -141,11 +141,34 @@ func run(logger *slog.Logger) int {
 		)
 		return 1
 	}
+	logStatsService, err := service.NewStatsService(
+		logRepository,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log statistics service",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
 
+	logStatsHandler, err := handler.NewStatsHandler(
+		logStatsService,
+	)
+	if err != nil {
+		logger.Error(
+			"failed to create log statistics handler",
+			"event", "service_start",
+			"error", err,
+		)
+		return 1
+	}
 	readiness := server.NewReadiness(sqlDB.PingContext)
 
 	publicRouter, err := server.NewPublicRouter(
 		logQueryHandler,
+		logStatsHandler,
 		readiness,
 		logger,
 	)

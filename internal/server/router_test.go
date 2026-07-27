@@ -323,17 +323,25 @@ func TestNewPublicRouterRejectsInvalidDependencies(
 	t *testing.T,
 ) {
 	tests := []struct {
-		name       string
-		logHandler PublicLogHandler
-		readiness  *Readiness
+		name         string
+		logHandler   PublicLogHandler
+		statsHandler PublicStatsHandler
+		readiness    *Readiness
 	}{
 		{
-			name:      "nil handler",
-			readiness: newReadyReadiness(),
+			name:         "nil log handler",
+			statsHandler: &fakePublicStatsHandler{},
+			readiness:    newReadyReadiness(),
 		},
 		{
-			name:       "nil readiness",
+			name:       "nil stats handler",
 			logHandler: &fakePublicLogHandler{},
+			readiness:  newReadyReadiness(),
+		},
+		{
+			name:         "nil readiness",
+			logHandler:   &fakePublicLogHandler{},
+			statsHandler: &fakePublicStatsHandler{},
 		},
 	}
 
@@ -341,6 +349,7 @@ func TestNewPublicRouterRejectsInvalidDependencies(
 		t.Run(tt.name, func(t *testing.T) {
 			router, err := NewPublicRouter(
 				tt.logHandler,
+				tt.statsHandler,
 				tt.readiness,
 				newTestLogger(),
 			)
@@ -356,7 +365,6 @@ func TestNewPublicRouterRejectsInvalidDependencies(
 		})
 	}
 }
-
 func TestInternalRouterDoesNotExposePublicRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -649,6 +657,7 @@ func newPublicRouterForTest(
 
 	router, err := NewPublicRouter(
 		logHandler,
+		&fakePublicStatsHandler{},
 		readiness,
 		newTestLogger(),
 	)
@@ -663,4 +672,92 @@ func newTestLogger() *slog.Logger {
 	return slog.New(
 		slog.NewTextHandler(io.Discard, nil),
 	)
+}
+
+type fakePublicStatsHandler struct {
+	levelCalls   int
+	serviceCalls int
+}
+
+func (h *fakePublicStatsHandler) GetLevelStats(
+	c *gin.Context,
+) {
+	h.levelCalls++
+	c.Status(http.StatusNoContent)
+}
+
+func (h *fakePublicStatsHandler) GetServiceStats(
+	c *gin.Context,
+) {
+	h.serviceCalls++
+	c.Status(http.StatusNoContent)
+}
+func TestPublicRouterRegistersStatisticsRoutes(
+	t *testing.T,
+) {
+	gin.SetMode(gin.TestMode)
+
+	statsHandler := &fakePublicStatsHandler{}
+
+	router, err := NewPublicRouter(
+		&fakePublicLogHandler{},
+		statsHandler,
+		newReadyReadiness(),
+		newTestLogger(),
+	)
+	if err != nil {
+		t.Fatalf("create public router: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		path      string
+		wantCalls func() int
+	}{
+		{
+			name: "level statistics route",
+			path: "/api/v1/stats/levels",
+			wantCalls: func() int {
+				return statsHandler.levelCalls
+			},
+		},
+		{
+			name: "service statistics route",
+			path: "/api/v1/stats/services",
+			wantCalls: func() int {
+				return statsHandler.serviceCalls
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := tt.wantCalls()
+
+			request := httptest.NewRequest(
+				http.MethodGet,
+				tt.path,
+				nil,
+			)
+			recorder := httptest.NewRecorder()
+
+			router.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusNoContent {
+				t.Fatalf(
+					"status code = %d, want %d",
+					recorder.Code,
+					http.StatusNoContent,
+				)
+			}
+
+			if got := tt.wantCalls(); got != before+1 {
+				t.Fatalf(
+					"handler calls = %d, want %d",
+					got,
+					before+1,
+				)
+			}
+		})
+	}
 }

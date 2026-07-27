@@ -19,7 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestLogIngestionAndPublicQueryIntegration(t *testing.T) {
+func TestLogIngestionQueryAndStatisticsIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	gormDB, err := repository.OpenSQLite(
@@ -78,7 +78,19 @@ func TestLogIngestionAndPublicQueryIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create query handler: %v", err)
 	}
+	logStatsService, err := service.NewStatsService(
+		logRepository,
+	)
+	if err != nil {
+		t.Fatalf("create statistics service: %v", err)
+	}
 
+	logStatsHandler, err := handler.NewStatsHandler(
+		logStatsService,
+	)
+	if err != nil {
+		t.Fatalf("create statistics handler: %v", err)
+	}
 	readiness := server.NewReadiness(sqlDB.PingContext)
 	readiness.SetReady(true)
 
@@ -88,6 +100,7 @@ func TestLogIngestionAndPublicQueryIntegration(t *testing.T) {
 
 	publicRouter, err := server.NewPublicRouter(
 		queryHandler,
+		logStatsHandler,
 		readiness,
 		logger,
 	)
@@ -135,6 +148,57 @@ func TestLogIngestionAndPublicQueryIntegration(t *testing.T) {
 			ingestRecorder.Code,
 			http.StatusCreated,
 			ingestRecorder.Body.String(),
+		)
+	}
+
+	bulkBody := `[
+		{
+			"source_event_id": "integration-event-002",
+			"agent_id": "integration-agent",
+			"container_name": "integration-container",
+			"service": "integration-service",
+			"level": "error",
+			"message": "integration error message",
+			"source": "stderr",
+			"logged_at": "2026-07-24T10:01:00Z"
+		},
+		{
+			"source_event_id": "integration-event-003",
+			"agent_id": "integration-agent",
+			"container_name": "integration-container",
+			"service": "worker-service",
+			"level": "warn",
+			"message": "integration warning message",
+			"source": "stdout",
+			"logged_at": "2026-07-24T10:02:00Z"
+		},
+		{
+			"source_event_id": "integration-event-004",
+			"agent_id": "integration-agent",
+			"container_name": "other-container",
+			"service": "other-service",
+			"level": "error",
+			"message": "log excluded by container filter",
+			"source": "stderr",
+			"logged_at": "2026-07-24T10:03:00Z"
+		}
+	]`
+	bulkRecorder := httptest.NewRecorder()
+	bulkRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/v1/logs/bulk",
+		strings.NewReader(bulkBody),
+	)
+	bulkRequest.Header.Set("Content-Type", "application/json")
+
+	internalRouter.ServeHTTP(bulkRecorder, bulkRequest)
+
+	if bulkRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"bulk ingestion status = %d, want %d; body = %s",
+			bulkRecorder.Code,
+			http.StatusOK,
+			bulkRecorder.Body.String(),
 		)
 	}
 
@@ -243,5 +307,144 @@ func TestLogIngestionAndPublicQueryIntegration(t *testing.T) {
 
 	if !rawEvent.Nested.OK || rawEvent.Sequence != 1 {
 		t.Fatalf("detail raw_event = %+v", rawEvent)
+	}
+
+	levelStatsRecorder := httptest.NewRecorder()
+	levelStatsRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/stats/levels?container=integration-container",
+		nil,
+	)
+
+	publicRouter.ServeHTTP(
+		levelStatsRecorder,
+		levelStatsRequest,
+	)
+
+	if levelStatsRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"level statistics status = %d, want %d; body = %s",
+			levelStatsRecorder.Code,
+			http.StatusOK,
+			levelStatsRecorder.Body.String(),
+		)
+	}
+
+	var levelStatsResponse struct {
+		Data []struct {
+			Level      string  `json:"level"`
+			Count      int64   `json:"count"`
+			Percentage float64 `json:"percentage"`
+		} `json:"data"`
+		Total int64 `json:"total"`
+	}
+	if err := json.Unmarshal(
+		levelStatsRecorder.Body.Bytes(),
+		&levelStatsResponse,
+	); err != nil {
+		t.Fatalf("decode level statistics response: %v", err)
+	}
+
+	expectedLevels := []struct {
+		level      string
+		count      int64
+		percentage float64
+	}{
+		{level: "ERROR", count: 1, percentage: 33.3},
+		{level: "INFO", count: 1, percentage: 33.3},
+		{level: "WARN", count: 1, percentage: 33.3},
+	}
+
+	if levelStatsResponse.Total != 3 ||
+		len(levelStatsResponse.Data) != len(expectedLevels) {
+		t.Fatalf(
+			"level statistics total = %d, data length = %d; want 3 and %d",
+			levelStatsResponse.Total,
+			len(levelStatsResponse.Data),
+			len(expectedLevels),
+		)
+	}
+
+	for index, expected := range expectedLevels {
+		actual := levelStatsResponse.Data[index]
+		if actual.Level != expected.level ||
+			actual.Count != expected.count ||
+			actual.Percentage != expected.percentage {
+			t.Fatalf(
+				"level statistics data[%d] = %+v; want level=%s count=%d percentage=%.1f",
+				index,
+				actual,
+				expected.level,
+				expected.count,
+				expected.percentage,
+			)
+		}
+	}
+
+	serviceStatsRecorder := httptest.NewRecorder()
+	serviceStatsRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/stats/services?container=integration-container",
+		nil,
+	)
+
+	publicRouter.ServeHTTP(
+		serviceStatsRecorder,
+		serviceStatsRequest,
+	)
+
+	if serviceStatsRecorder.Code != http.StatusOK {
+		t.Fatalf(
+			"service statistics status = %d, want %d; body = %s",
+			serviceStatsRecorder.Code,
+			http.StatusOK,
+			serviceStatsRecorder.Body.String(),
+		)
+	}
+
+	var serviceStatsResponse struct {
+		Data []struct {
+			Service string `json:"service"`
+			Count   int64  `json:"count"`
+		} `json:"data"`
+		Total int64 `json:"total"`
+	}
+	if err := json.Unmarshal(
+		serviceStatsRecorder.Body.Bytes(),
+		&serviceStatsResponse,
+	); err != nil {
+		t.Fatalf("decode service statistics response: %v", err)
+	}
+
+	expectedServices := []struct {
+		service string
+		count   int64
+	}{
+		{service: "integration-service", count: 2},
+		{service: "worker-service", count: 1},
+	}
+
+	if serviceStatsResponse.Total != 3 ||
+		len(serviceStatsResponse.Data) != len(expectedServices) {
+		t.Fatalf(
+			"service statistics total = %d, data length = %d; want 3 and %d",
+			serviceStatsResponse.Total,
+			len(serviceStatsResponse.Data),
+			len(expectedServices),
+		)
+	}
+
+	for index, expected := range expectedServices {
+		actual := serviceStatsResponse.Data[index]
+		if actual.Service != expected.service ||
+			actual.Count != expected.count {
+			t.Fatalf(
+				"service statistics data[%d] = %+v; want service=%s count=%d",
+				index,
+				actual,
+				expected.service,
+				expected.count,
+			)
+		}
 	}
 }
