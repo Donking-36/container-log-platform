@@ -175,6 +175,8 @@ docs/             需求、用例、架构与ADR
 - [系统架构](docs/architecture.md)
 - [REST API 使用说明](docs/api.md)
 - [日志生产器说明](docs/log-producer.md)
+- [Filebeat采集配置](docs/filebeat.md)
+- [Logstash传输配置](docs/logstash.md)
 - [版本路线图](docs/release-roadmap.md)
 - [架构决策记录](docs/adr/)
 - [核心用例](docs/use-cases/)
