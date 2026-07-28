@@ -1,0 +1,2 @@
+seeding 10000 deterministic records in batches of 500
+running 10 query workers for 30s

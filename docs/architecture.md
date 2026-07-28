@@ -2,15 +2,15 @@
 
 > 文档编号：CLP-ARCH-001
 >
-> 文档版本：0.1.0-draft
+> 文档版本：1.0.0
 >
 > 目标范围：完整MVP（目标稳定版本v1.0.0）
 >
 > 增量发布边界见[版本路线图](release-roadmap.md)
 >
-> 最后更新：2026-07-22
+> 最后更新：2026-07-28
 >
-> 文档状态：已评审
+> 文档状态：已实现并通过工程验收
 
 ## 1. 文档目的
 
@@ -647,7 +647,7 @@ container-log-platform/
 │   ├── repository/
 │   ├── server/
 │   └── service/
-├── deployments/
+├── deploy/
 │   ├── filebeat/
 │   └── logstash/pipeline/
 ├── test/
@@ -671,17 +671,19 @@ container-log-platform/
 
 实现完成后必须逐项确认：
 
-- [ ] API、Filebeat、Logstash和`log-producer`职责与本文档一致。
-- [ ] SQLite不是独立容器，数据库文件位于宿主机`./data`。
-- [ ] 8081和5044没有发布到宿主机。
-- [ ] Filebeat只采集允许的来源，没有递归采集。
-- [ ] Logstash使用持久队列和HTTP批量输出。
-- [ ] API使用唯一`event_id`实现幂等存储。
-- [ ] Public和Internal Router分离。
-- [ ] 三类来源均通过端到端测试。
-- [ ] 故障恢复矩阵中的核心场景有自动或可重复测试。
-- [ ] 启动和查询性能达到需求指标。
-- [ ] 所有持久化挂载通过容器重建测试。
+- [x] API、Filebeat、Logstash和`log-producer`职责与本文档一致。
+- [x] SQLite不是独立容器，数据库文件位于宿主机`./data`。
+- [x] 8081和5044没有发布到宿主机。
+- [x] Filebeat只采集允许的来源，没有递归采集。
+- [x] Logstash使用持久队列和HTTP批量输出。
+- [x] API使用唯一`event_id`实现幂等存储。
+- [x] Public和Internal Router分离。
+- [x] 三类来源均通过端到端测试。
+- [x] 故障恢复矩阵中的核心场景有自动或可重复测试。
+- [x] 启动和查询性能达到需求指标。
+- [x] 所有持久化挂载通过容器重建测试。
+
+逐项证据见[最终验收报告](test-report.md)。
 
 ## 24. 后续演进方向
 
@@ -695,4 +697,5 @@ container-log-platform/
 - Kubernetes部署和Filebeat DaemonSet。
 - 日志脱敏、租户隔离和保留策略。
 
-演进不得在当前MVP尚未验收前提前引入。
+完整MVP工程验收已经通过。以上演进仍应根据真实需求逐项设计和验证，不在
+`v1.0.0`发布收尾阶段临时扩大范围。

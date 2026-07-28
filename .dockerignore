@@ -14,7 +14,12 @@ bin/
 coverage.out
 coverage.html
 
+artifacts/
 docs/
 deploy/
+scripts/
+test/
+
+compose.acceptance.yaml
 CHANGELOG.md
 README.md

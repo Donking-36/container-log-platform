@@ -1,11 +1,14 @@
 # 项目二：容器化日志收集平台实施方案
 
-> 文档状态：已确认的实施基线  
+> 文档状态：实现与工程验收已完成，待发布
 > 制定日期：2026-07-22  
 > 目标范围：完整MVP（目标稳定版本v1.0.0）
 >
 > 增量发布边界见[版本路线图](release-roadmap.md)
 > 工作方式：Git Flow + Conventional Commits + 文档驱动开发
+>
+> 实际结果见[最终验收报告](test-report.md)和
+> [性能测试报告](performance-report.md)
 
 ## 1. 项目目标
 
@@ -417,7 +420,7 @@ container-log-platform/
 │   ├── repository/
 │   ├── service/
 │   └── server/
-├── deployments/
+├── deploy/
 │   ├── filebeat/
 │   │   └── filebeat.yml
 │   └── logstash/
@@ -710,3 +713,15 @@ CHANGELOG.md
 - Gin文档：<https://gin-gonic.com/en/docs/>
 - GORM文档：<https://gorm.io/docs/>
 - Docker Compose文档：<https://docs.docker.com/compose/>
+
+## 20. 实施结果
+
+完整MVP工程验收已于2026-07-28在提交`f980ecd`上通过：
+
+- P2-01至P2-11的需求、架构、代码、采集链路和Compose编排均已完成。
+- P2-12质量验证已通过，包含Go质量门禁、5次冷启动、查询性能和完整E2E。
+- 三类日志、幂等重放、Logstash持久队列、Filebeat/API重建、SQLite持久化、
+  request ID和优雅退出均有可重复证据。
+- P2-13文档交付已完成，剩余Git Flow发布、`main`合并和`v1.0.0`标签。
+
+因此当前阶段状态为“完整MVP实现和工程验收完成，待正式发布”。

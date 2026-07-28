@@ -6,8 +6,8 @@
 |---|---|---|
 | `v0.1.0` | 已发布 | Go/Gin项目骨架、双HTTP Server、SQLite/GORM数据层、幂等日志接收、可观测性基础 |
 | `v0.2.0` | 已发布 | 日志列表、详情、级别统计、服务统计及查询测试 |
-| `v0.3.0` | 开发中 | `log-producer`、Filebeat、Logstash、Dockerfile、Compose和持久化挂载 |
-| `v1.0.0` | 计划中 | 完整端到端验收、性能与恢复验证、稳定文档和正式交付 |
+| `v0.3.0` | 实现完成，待发布 | `log-producer`、Filebeat、Logstash、Dockerfile、Compose和持久化挂载 |
+| `v1.0.0` | 工程验收通过，发布准备中 | 完整端到端验收、性能与恢复验证、稳定文档和正式交付 |
 
 ## 发布原则
 
@@ -24,3 +24,7 @@ v0.1.0 接收核心
 → v0.3.0 自动采集与Compose
 → v1.0.0 完整验收
 ```
+
+完整MVP工程验收已于2026-07-28在提交`f980ecd`上通过。当前剩余工作是
+合并`feature/final-acceptance`、创建release分支并完成`main`合并和版本标签；
+在这些Git Flow步骤完成前，不将`v1.0.0`标记为已发布。

@@ -1,0 +1,13 @@
+{
+  "verified_at": "2026-07-28T07:49:11.126258042Z",
+  "prefix": "acceptance-20260728t074707z-307572",
+  "expected": 1300,
+  "actual": 1300,
+  "unique_event_ids": 1300,
+  "source_counts": {
+    "file": 650,
+    "stderr": 130,
+    "stdout": 520
+  },
+  "passed": true
+}

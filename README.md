@@ -4,7 +4,8 @@
 
 ## 当前状态
 
-`v0.1.0` 日志接收核心和 `v0.2.0` 查询与统计能力已经发布，当前正在开发 `v0.3.0` 自动采集与 Compose 能力。
+`v0.1.0`日志接收核心和`v0.2.0`查询与统计能力已经发布。自动采集、
+Compose编排和完整MVP工程验收均已完成，当前进行发布收尾。
 
 当前已完成：
 
@@ -31,8 +32,20 @@
 - API与日志生产器的非root多阶段镜像
 - 四服务Compose编排、健康检查、网络隔离和持久化挂载
 - Go 单元测试与基础 CI
+- 可重复执行的冷启动、查询性能和Compose端到端验收工具
+- API中断、Logstash持久队列、Filebeat/API重建和SQLite持久化验证
+- request ID关联、Race Detector和SIGTERM优雅退出验证
 
-`v0.3.0`的自动采集与Compose能力已完成实现，正在进行发布前验收。
+完整MVP工程验收已于2026-07-28在提交`f980ecd`上通过，结果见
+[最终验收报告](docs/test-report.md)和[性能报告](docs/performance-report.md)。
+当前尚未合并到`main`或创建`v1.0.0`标签。
+
+| 验收项 | 实际结果 | 门槛 |
+|---|---:|---:|
+| API冷启动 | 5/5通过，最大770ms | <=3000ms |
+| 组合查询 | P95 9.228ms，2192.10 RPS | P95 <=500ms |
+| 查询错误 | 0 / 65,772 | 0 |
+| E2E与恢复 | 1000 → 去重1000 → PQ恢复1200 → 重建后1300 | 缺失0、重复存储0 |
 
 ## 数据链路
 
@@ -197,6 +210,17 @@ go test ./...
 
 CI 还会执行竞态检测和 API 构建。
 
+正式验收：
+
+```bash
+./scripts/acceptance/startup.sh
+./scripts/acceptance/query-performance.sh
+./scripts/acceptance/e2e.sh
+```
+
+验收脚本使用独立端口、临时SQLite目录和独立Compose资源。原始结果保存在
+`artifacts/acceptance/`。
+
 ## 目录结构
 
 ```text
@@ -211,6 +235,10 @@ internal/middleware/ request ID等HTTP中间件
 internal/repository/ SQLite持久化
 internal/server/  Gin Router与HTTP Server生命周期
 internal/service/ 日志接收业务规则
+scripts/acceptance/ 启动、性能与Compose端到端验收脚本
+test/e2e/        E2E公开API验证程序
+test/performance/ 查询压力与结果计算程序
+artifacts/acceptance/ 正式验收原始证据
 data/             SQLite持久化目录
 docs/             需求、用例、架构与ADR
 Dockerfile        API和日志生产器的多阶段构建
@@ -229,6 +257,9 @@ compose.yaml      四服务编排、网络与持久化资源
 - [Filebeat采集配置](docs/filebeat.md)
 - [Logstash传输配置](docs/logstash.md)
 - [Docker Compose部署说明](docs/deployment.md)
+- [最终验收报告](docs/test-report.md)
+- [性能测试报告](docs/performance-report.md)
+- [项目复盘](docs/retrospective.md)
 - [版本路线图](docs/release-roadmap.md)
 - [架构决策记录](docs/adr/)
 - [核心用例](docs/use-cases/)
