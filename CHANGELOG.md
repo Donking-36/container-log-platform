@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-28
+
 ### 新增
 
 - 增加可配置的`log-producer`，支持stdout、stderr和NDJSON文件输出
@@ -76,6 +78,7 @@
 - 尚未接入 Filebeat 和 Logstash
 - 尚未提供完整的 Docker Compose 部署链路
 
-[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Donking-36/container-log-platform/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Donking-36/container-log-platform/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Donking-36/container-log-platform/releases/tag/v0.1.0
