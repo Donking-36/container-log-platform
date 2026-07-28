@@ -26,9 +26,13 @@
 - 按服务聚合日志数量
 - 统计接口的组合过滤、稳定排序和空结果处理
 - 可配置、可编号并输出三类日志的 `log-producer`
+- Filebeat容器自动发现、文件采集、registry和磁盘队列
+- Logstash字段转换、非法事件隔离、HTTP批量输出和持久队列
+- API与日志生产器的非root多阶段镜像
+- 四服务Compose编排、健康检查、网络隔离和持久化挂载
 - Go 单元测试与基础 CI
 
-查询与统计 API 已完成；Filebeat、Logstash 和 Compose 将在 `v0.3.0` 实现。
+`v0.3.0`的自动采集与Compose能力已完成实现，正在进行发布前验收。
 
 ## 数据链路
 
@@ -46,7 +50,8 @@ log-producer
 
 - Go 1.26.5
 - Git
-- 后续容器化阶段需要 Docker Engine 和 Docker Compose
+- Docker Engine
+- Docker Compose
 
 ## 本地启动
 
@@ -91,6 +96,48 @@ go run ./cmd/api
 
 程序本身不会自动解析 `.env`，上面的 `source` 命令负责把配置导入当前 Shell 环境。
 
+## Docker Compose一键启动
+
+首次启动前准备配置：
+
+```bash
+cp .env.example .env
+```
+
+默认容器用户的UID/GID均为`1000`。如果`id -u`或`id -g`不是`1000`，
+请同步修改`.env`中的`APP_UID`和`APP_GID`。
+
+校验并启动完整日志链路：
+
+```bash
+docker compose config --quiet
+docker compose up -d --build --wait --wait-timeout 180
+docker compose ps
+```
+
+验证公开API和自动采集结果：
+
+```bash
+curl --noproxy '*' -fsS http://127.0.0.1:8080/healthz
+curl --noproxy '*' -fsS http://127.0.0.1:8080/readyz
+
+curl --noproxy '*' -fsS \
+  'http://127.0.0.1:8080/api/v1/logs?service=log-producer&page_size=20'
+```
+
+以上命令使用默认宿主端口8080；修改`API_PORT`后，请同步替换URL中的端口。
+
+宿主机只发布公开API端口。停止平台时使用：
+
+```bash
+docker compose down
+```
+
+该命令保留SQLite、Filebeat registry、Logstash持久队列和生产器文件日志。
+不要把`docker compose down -v`作为普通停止命令。
+
+完整说明见[Docker Compose部署说明](docs/deployment.md)。
+
 ## 当前接口
 
 | Server | 接口 | 当前行为 |
@@ -109,7 +156,6 @@ go run ./cmd/api
 ```bash
 curl --noproxy '*' -i http://127.0.0.1:8080/healthz
 curl --noproxy '*' -i http://127.0.0.1:8080/readyz
-curl --noproxy '*' -i http://127.0.0.1:8081/healthz
 
 curl --noproxy '*' -i \
   -H 'Content-Type: application/json' \
@@ -155,6 +201,9 @@ CI 还会执行竞态检测和 API 构建。
 
 ```text
 cmd/api/          API程序入口
+cmd/log-producer/ 标准日志生产器
+deploy/filebeat/  Filebeat采集配置
+deploy/logstash/  Logstash配置、pipeline和转换脚本
 internal/config/  应用配置
 internal/handler/ HTTP解析、状态码和响应DTO
 internal/ingestion/ 日志事件规范化与幂等ID
@@ -164,6 +213,8 @@ internal/server/  Gin Router与HTTP Server生命周期
 internal/service/ 日志接收业务规则
 data/             SQLite持久化目录
 docs/             需求、用例、架构与ADR
+Dockerfile        API和日志生产器的多阶段构建
+compose.yaml      四服务编排、网络与持久化资源
 ```
 
 目录只在产生真实代码时创建，不预先提交大量空包。
@@ -177,6 +228,7 @@ docs/             需求、用例、架构与ADR
 - [日志生产器说明](docs/log-producer.md)
 - [Filebeat采集配置](docs/filebeat.md)
 - [Logstash传输配置](docs/logstash.md)
+- [Docker Compose部署说明](docs/deployment.md)
 - [版本路线图](docs/release-roadmap.md)
 - [架构决策记录](docs/adr/)
 - [核心用例](docs/use-cases/)
