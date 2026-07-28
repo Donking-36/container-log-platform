@@ -1,0 +1,165 @@
+name: container-log-platform
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
+    image: container-log-platform-api:0.3.0
+    environment:
+      APP_ENV: "${APP_ENV:-development}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      PUBLIC_ADDR: ":8080"
+      INTERNAL_ADDR: ":8081"
+      SHUTDOWN_TIMEOUT: "${SHUTDOWN_TIMEOUT:-10s}"
+      DATABASE_PATH: "/app/data/log-platform.db"
+      MAX_LOG_MESSAGE_BYTES: "${MAX_LOG_MESSAGE_BYTES:-65536}"
+      MAX_INGEST_BODY_BYTES: "${MAX_INGEST_BODY_BYTES:-16777216}"
+      MAX_INGEST_BATCH_SIZE: "${MAX_INGEST_BATCH_SIZE:-1000}"
+      DEFAULT_PAGE_SIZE: "${DEFAULT_PAGE_SIZE:-20}"
+      MAX_PAGE_SIZE: "${MAX_PAGE_SIZE:-100}"
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - public-net
+      - ingestion-net
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8080/readyz
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 3s
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:9.4.2
+    command:
+      - -f
+      - /usr/share/logstash/pipeline/logstash.conf
+    environment:
+      INGESTION_API_URL: "http://api:8081/internal/v1/logs/bulk"
+      LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - ./deploy/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./deploy/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - logstash-data:/usr/share/logstash/data
+    networks:
+      - ingestion-net
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -fsS
+        - -o
+        - /dev/null
+        - http://127.0.0.1:9600/_node/pipelines/main
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 20s
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:9.4.2
+    user: root
+    command:
+      - --environment
+      - container
+      - --strict.perms=false
+    environment:
+      LOGSTASH_HOST: "logstash:5044"
+      PRODUCER_CONTAINER_NAME: "log-producer"
+    volumes:
+      - ./deploy/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - producer-logs:/logs:ro
+      - filebeat-data:/usr/share/filebeat/data
+    networks:
+      - ingestion-net
+    depends_on:
+      logstash:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/curl
+        - -fsS
+        - -o
+        - /dev/null
+        - http://127.0.0.1:5066/
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  log-producer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: log-producer
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
+    image: container-log-platform-log-producer:0.3.0
+    container_name: log-producer
+    environment:
+      - PRODUCER_LOG_PATH=/logs/events.ndjson
+      - PRODUCER_INTERVAL=${PRODUCER_INTERVAL:-1s}
+      - PRODUCER_CYCLES=${PRODUCER_CYCLES:-0}
+      # A bare key forwards an exported shell value and stays unset otherwise.
+      - PRODUCER_RUN_ID
+    volumes:
+      - producer-logs:/logs
+    network_mode: none
+    depends_on:
+      filebeat:
+        condition: service_healthy
+    labels:
+      com.donking36.container_log_platform.collect: "true"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test:
+        - CMD
+        - /bin/sh
+        - -c
+        - test -s /logs/events.ndjson
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 5s
+    restart: "on-failure:5"
+    stop_grace_period: 15s
+
+volumes:
+  producer-logs:
+  filebeat-data:
+  logstash-data:
+
+networks:
+  ingestion-net:
+    internal: true
+  public-net:
