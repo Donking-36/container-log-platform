@@ -1,0 +1,5 @@
+NAME                                                IMAGE                                       COMMAND                  SERVICE        CREATED          STATUS                    PORTS
+clp-acceptance-20260728t074707z-307572-api-1        container-log-platform-api:0.3.0            "/usr/local/bin/api"     api            30 seconds ago   Up 29 seconds (healthy)   8081/tcp, 127.0.0.1:18083->8080/tcp
+clp-acceptance-20260728t074707z-307572-filebeat-1   docker.elastic.co/beats/filebeat:9.4.2      "/usr/bin/tini -- /u…"   filebeat       29 seconds ago   Up 11 seconds (healthy)   
+clp-acceptance-20260728t074707z-307572-logstash-1   docker.elastic.co/logstash/logstash:9.4.2   "/usr/local/bin/dock…"   logstash       30 seconds ago   Up 22 seconds (healthy)   5044/tcp, 9600/tcp
+log-producer                                        container-log-platform-log-producer:0.3.0   "/usr/local/bin/log-…"   log-producer   29 seconds ago   Up 5 seconds (healthy)    
