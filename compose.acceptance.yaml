@@ -1,0 +1,10 @@
+services:
+  api:
+    ports: !override
+      - "127.0.0.1:${ACCEPTANCE_API_PORT:-18083}:8080"
+    volumes: !override
+      - "${ACCEPTANCE_DATA_DIR:?ACCEPTANCE_DATA_DIR must be set}:/app/data"
+
+  log-producer:
+    environment:
+      PRODUCER_INTERVAL: 250ms

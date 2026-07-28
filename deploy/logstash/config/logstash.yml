@@ -1,0 +1,15 @@
+api.http.host: "0.0.0.0"
+api.http.port: 9600
+
+pipeline.workers: 1
+pipeline.batch.size: 50
+pipeline.ecs_compatibility: v8
+
+queue.type: persisted
+queue.max_bytes: 256mb
+queue.checkpoint.writes: 1
+queue.drain: false
+
+config.reload.automatic: false
+monitoring.enabled: false
+log.level: info

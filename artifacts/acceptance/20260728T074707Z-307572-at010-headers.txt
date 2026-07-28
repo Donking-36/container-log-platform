@@ -1,0 +1,6 @@
+HTTP/1.1 400 Bad Request
+Content-Type: application/json; charset=utf-8
+X-Request-Id: acceptance-20260728t074707z-307572-request
+Date: Tue, 28 Jul 2026 07:49:13 GMT
+Content-Length: 139
+

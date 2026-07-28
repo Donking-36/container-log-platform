@@ -1,0 +1,1 @@
+api-1  | {"time":"2026-07-28T07:49:13.15731071Z","level":"WARN","msg":"HTTP request completed","service":"api","event":"http_request","request_id":"acceptance-20260728t074707z-307572-request","method":"GET","path":"/api/v1/logs","client_ip":"172.19.0.1","status":400,"latency_ms":0,"error_code":"INVALID_ARGUMENT"}

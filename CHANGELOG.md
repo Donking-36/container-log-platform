@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-28
+
+### 新增
+
+- 增加可配置的`log-producer`，支持stdout、stderr和NDJSON文件输出
+- 为生产器事件增加可重复核对的来源ID、序号、级别和UTC发生时间
+- 增加生产器配置、输出数量、事件唯一性和文件追加测试
+- 增加Filebeat容器自动发现、文件采集、registry和磁盘队列
+- 增加Logstash Beats输入、字段转换、HTTP批量输出和持久队列
+- 增加API与log-producer非root多阶段镜像
+- 增加四服务Compose编排、健康检查、内部网络和持久化挂载
+- 增加API冷启动、查询性能和Compose端到端验收工具
+- 增加正式验收、性能测试和项目复盘文档
+
+### 验证
+
+- 验证stdout、stderr和文件日志的完整采集、分类与字段映射
+- 验证1000条事件幂等重放后不产生重复存储
+- 验证API中断期间200条事件通过Logstash持久队列全部恢复
+- 验证Filebeat和API重建后继续采集且SQLite数据不丢失
+- 验证API冷启动5次均低于3秒
+- 验证10,000条数据、10并发、30秒查询P95为9.228ms且零错误
+- 验证request ID跨响应头、响应体和结构化日志关联
+- 验证API收到SIGTERM后以退出码0完成优雅退出
+
 ## [0.2.0] - 2026-07-27
 
 ### 新增
@@ -53,6 +78,7 @@
 - 尚未接入 Filebeat 和 Logstash
 - 尚未提供完整的 Docker Compose 部署链路
 
-[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Donking-36/container-log-platform/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Donking-36/container-log-platform/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Donking-36/container-log-platform/releases/tag/v0.1.0
