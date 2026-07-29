@@ -10,7 +10,7 @@ readonly REPO_ROOT="$(
   cd -- "${SCRIPT_DIR}/../.."
   pwd
 )"
-readonly IMAGE="${PERF_IMAGE:-container-log-platform-api:0.3.0}"
+readonly IMAGE="${PERF_IMAGE:-container-log-platform-api:1.0.0}"
 readonly PUBLIC_PORT="${PERF_PUBLIC_PORT:-18080}"
 readonly INTERNAL_PORT="${PERF_INTERNAL_PORT:-18081}"
 readonly RECORDS="${PERF_RECORDS:-10000}"

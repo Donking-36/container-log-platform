@@ -10,7 +10,7 @@ readonly REPO_ROOT="$(
   cd -- "${SCRIPT_DIR}/../.."
   pwd
 )"
-readonly IMAGE="${STARTUP_IMAGE:-container-log-platform-api:0.3.0}"
+readonly IMAGE="${STARTUP_IMAGE:-container-log-platform-api:1.0.0}"
 readonly PUBLIC_PORT="${STARTUP_PUBLIC_PORT:-18082}"
 readonly RUNS="${STARTUP_RUNS:-5}"
 readonly LIMIT_MS="${STARTUP_LIMIT_MS:-3000}"

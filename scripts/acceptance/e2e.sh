@@ -17,7 +17,7 @@ readonly PROJECT="clp-acceptance-${RUN_ID,,}"
 readonly RESULT_DIR="${ACCEPTANCE_RESULT_DIR:-${REPO_ROOT}/artifacts/acceptance}"
 readonly PRODUCER_IMAGE="$(
   printf '%s' \
-    "${ACCEPTANCE_PRODUCER_IMAGE:-container-log-platform-log-producer:0.3.0}"
+    "${ACCEPTANCE_PRODUCER_IMAGE:-container-log-platform-log-producer:1.0.0}"
 )"
 readonly FIXTURE_SETTLE_SECONDS="${ACCEPTANCE_FIXTURE_SETTLE_SECONDS:-10}"
 

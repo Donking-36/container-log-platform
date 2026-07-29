@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const version = "dev"
+var version = "dev"
 
 func main() {
 	logger := slog.New(
