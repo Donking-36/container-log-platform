@@ -2,9 +2,11 @@
 
 ARG GO_VERSION=1.26.5
 ARG ALPINE_VERSION=3.23
+ARG VERSION=dev
 
 FROM golang:${GO_VERSION}-alpine AS builder
 
+ARG VERSION
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -17,7 +19,7 @@ RUN mkdir -p /out \
     && CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
         -buildvcs=false \
-        -ldflags="-s -w" \
+        -ldflags="-s -w -X main.version=${VERSION}" \
         -o /out/api \
         ./cmd/api \
     && CGO_ENABLED=0 GOOS=linux go build \
