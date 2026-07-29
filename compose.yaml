@@ -9,7 +9,8 @@ services:
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
-    image: container-log-platform-api:0.3.0
+        VERSION: "1.0.0"
+    image: container-log-platform-api:1.0.0
     environment:
       APP_ENV: "${APP_ENV:-development}"
       LOG_LEVEL: "${LOG_LEVEL:-info}"
@@ -120,7 +121,8 @@ services:
       args:
         APP_UID: "${APP_UID:-1000}"
         APP_GID: "${APP_GID:-1000}"
-    image: container-log-platform-log-producer:0.3.0
+        VERSION: "1.0.0"
+    image: container-log-platform-log-producer:1.0.0
     container_name: log-producer
     environment:
       - PRODUCER_LOG_PATH=/logs/events.ndjson

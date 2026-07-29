@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-29
+
+### 发布
+
+- 将完整MVP晋级为首个稳定版本，正式完成第二阶段交付
+- 将Compose和验收脚本使用的活动镜像标签统一更新为`1.0.0`
+- 为API二进制增加构建时版本注入，正式镜像不再报告`version=dev`
+- 更新README、实施结果、验收结论、版本路线图和项目复盘状态
+- 正式完成P2-01至P2-13的实现、验证、文档和Git Flow发布
+
+### 验证
+
+- 复用2026-07-28最终验收证据，并在发布分支重新执行Go质量门禁和Compose构建
+- 验证API镜像启动日志正确报告`version=1.0.0`
+
 ## [0.3.0] - 2026-07-28
 
 ### 新增
@@ -78,7 +93,8 @@
 - 尚未接入 Filebeat 和 Logstash
 - 尚未提供完整的 Docker Compose 部署链路
 
-[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Donking-36/container-log-platform/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Donking-36/container-log-platform/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/Donking-36/container-log-platform/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Donking-36/container-log-platform/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Donking-36/container-log-platform/releases/tag/v0.1.0
