@@ -7,7 +7,9 @@ import (
 	"github.com/Donking-36/container-log-platform/internal/model"
 )
 
-// PrepareLog把外部事件转换为可以持久化的日志模型。
+// PrepareLog 把外部事件转换为可以持久化的日志模型。
+// 规范化、幂等键计算和入库时间赋值集中在这里，保证单条与批量接收
+// 使用完全一致的转换规则。
 func PrepareLog(
 	input EventInput,
 	maxMessageBytes int64,

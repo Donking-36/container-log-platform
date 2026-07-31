@@ -5,6 +5,7 @@ filebeat.autodiscover:
       hints.enabled: false
       labels.dedot: true
       templates:
+        # 只发现显式标记 collect=true 的容器，避免宿主机其他日志混入平台。
         - condition:
             equals:
               docker.container.labels.com.donking36.container_log_platform.collect: "true"
@@ -12,10 +13,14 @@ filebeat.autodiscover:
             - type: filestream
               id: producer-container-${data.docker.container.id}
               enabled: true
+              # 容器删除后继续读完日志尾部，再由 Filebeat 自身状态管理关闭采集器。
               close.on_state_change.removed: false
+              # 64 字节指纹让短小的验收日志文件也能尽快达到文件识别阈值。
               prospector.scanner.fingerprint.length: 64
               paths:
                 - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              # 解析顺序不可交换：先去掉 Docker json-file 外层，再把其中的
+              # message 按业务 NDJSON 解码到 producer 命名空间。
               parsers:
                 - container:
                     stream: all
@@ -33,6 +38,7 @@ filebeat.autodiscover:
                   name: log-producer
               fields_under_root: true
 
+# 第二个输入读取生产器写入共享卷的文件日志，与容器 stdout/stderr 采集并行。
 filebeat.inputs:
   - type: filestream
     id: producer-file
@@ -56,6 +62,8 @@ filebeat.inputs:
         name: ${PRODUCER_CONTAINER_NAME:log-producer}
     fields_under_root: true
 
+# Logstash 暂不可用时，未确认事件先写入 filebeat-data 卷中的磁盘队列，
+# Filebeat 重启后可以继续发送。
 queue.disk:
   path: ${path.data}/diskqueue
   max_size: 256MB

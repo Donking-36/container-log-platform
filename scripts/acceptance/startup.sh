@@ -65,6 +65,8 @@ if ! [[ "${RUN_ID}" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 1
 fi
 
+# 只有 5 次、3000ms 阈值属于正式基线；其他参数即使达到阈值也只标记
+# EXPLORATORY 并最终返回非零，避免探索性结果被误当成正式验收证据。
 baseline=1
 if [[ "${RUNS}" != "5" || "${LIMIT_MS}" != "3000" ]]; then
   baseline=0
@@ -111,6 +113,7 @@ printf 'run,started_at,ready_at,duration_ms,result\n' \
 
 failed=0
 
+# 每轮使用全新目录，测量包含首次建库和迁移的冷 SQLite 启动时间。
 for run_number in $(seq 1 "${RUNS}"); do
   run_data_dir="${data_dir}/run-${run_number}"
   mkdir -p "${run_data_dir}"
@@ -126,6 +129,8 @@ for run_number in $(seq 1 "${RUNS}"); do
 
   docker start "${container_id}" >/dev/null
 
+  # 以 Docker StartedAt 为起点，以 /readyz 首次成功为终点；
+  # 10 秒只用于防止脚本挂死，正式是否通过仍由 LIMIT_MS 判断。
   started_at="$(
     docker inspect \
       --format '{{.State.StartedAt}}' \

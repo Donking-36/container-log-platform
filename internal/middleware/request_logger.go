@@ -12,7 +12,9 @@ import (
 
 const logAttributesKey = "request_log_attributes"
 
-// AddLogAttributes为当前请求增加安全的结构化日志字段。
+// AddLogAttributes 为当前请求增加由应用代码选择的结构化日志字段。
+// Handler 只应放入计数、操作名和内部标识等安全值，不应添加日志正文、
+// 原始事件或凭据。
 func AddLogAttributes(
 	c *gin.Context,
 	attributes ...slog.Attr,
@@ -35,7 +37,10 @@ func AddLogAttributes(
 	c.Set(logAttributesKey, combined)
 }
 
-// RequestLogger记录HTTP方法、路由、状态码、耗时和request ID。
+// RequestLogger 记录 HTTP 方法、路由、状态码、耗时和 request ID。
+// 它必须在 Handler 完成后再读取状态与自定义属性，因此先调用 c.Next；
+// 4xx 记为 WARN，5xx 记为 ERROR，业务上返回 200 的永久拒绝也会通过
+// c.Errors 保留为 WARN。
 func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 	if logger == nil {
 		logger = slog.Default()
@@ -91,7 +96,7 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 		case status >= http.StatusBadRequest:
 			level = slog.LevelWarn
 		case len(c.Errors) > 0:
-			// 永久拒绝事件可以返回200，
+			// 永久拒绝事件可以返回 200，
 			// 但仍应在运行日志中体现为警告。
 			level = slog.LevelWarn
 		}
@@ -105,6 +110,8 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
+// remoteClientIP 只解析底层连接的 RemoteAddr，不信任可由客户端伪造的
+// X-Forwarded-For。若未来部署在可信反向代理后，应显式配置代理边界再扩展。
 func remoteClientIP(remoteAddr string) string {
 	value := strings.TrimSpace(remoteAddr)
 

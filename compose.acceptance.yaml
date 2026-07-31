@@ -1,5 +1,7 @@
 services:
   api:
+    # !override 替换主 Compose 的端口与卷列表，而不是追加；
+    # 验收实例只绑定本机回环地址，并使用一次性数据库目录。
     ports: !override
       - "127.0.0.1:${ACCEPTANCE_API_PORT:-18083}:8080"
     volumes: !override

@@ -6,7 +6,7 @@ import (
 	"github.com/Donking-36/container-log-platform/internal/model"
 )
 
-// CountByLevel按日志级别聚合日志数量。
+// CountByLevel 按日志级别聚合日志数量，并以数量降序、级别升序稳定排序。
 func (r *LogRepository) CountByLevel(
 	ctx context.Context,
 	filter model.LogFilter,
@@ -33,7 +33,7 @@ func (r *LogRepository) CountByLevel(
 	return stats, nil
 }
 
-// CountByService按服务名称聚合日志数量。
+// CountByService 按服务名称聚合日志数量，并以数量降序、服务名升序稳定排序。
 func (r *LogRepository) CountByService(
 	ctx context.Context,
 	filter model.LogFilter,

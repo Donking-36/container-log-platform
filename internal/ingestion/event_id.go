@@ -8,14 +8,19 @@ import (
 	"time"
 )
 
+// eventIDVersion 是指纹算法版本。修改字段或编码规则时必须升级版本，
+// 避免新旧算法意外生成同一命名空间下的事件标识。
 const eventIDVersion = "v1"
 
+// sourceEventFingerprint 用来源系统已经保证稳定的事件标识生成最小指纹。
 type sourceEventFingerprint struct {
 	Version       string `json:"version"`
 	Service       string `json:"service"`
 	SourceEventID string `json:"source_event_id"`
 }
 
+// fallbackFingerprint 在来源没有事件标识时，使用采集位置和内容生成可重放的指纹。
+// 字段顺序由结构体固定，确保 JSON 编码结果稳定。
 type fallbackFingerprint struct {
 	Version     string `json:"version"`
 	AgentID     string `json:"agent_id"`
@@ -27,7 +32,9 @@ type fallbackFingerprint struct {
 	Message     string `json:"message"`
 }
 
-// ComputeEventID为规范化事件计算稳定的平台幂等键。
+// ComputeEventID 为规范化事件计算稳定的平台幂等键。
+// 返回值采用“算法版本:SHA-256”格式；相同来源事件在重放后仍得到相同结果，
+// Repository 因而可以依靠 event_id 唯一索引实现幂等写入。
 func ComputeEventID(
 	event NormalizedEvent,
 ) (string, error) {
@@ -55,6 +62,8 @@ func fingerprintInput(
 	event NormalizedEvent,
 ) (any, error) {
 	if event.SourceEventID != nil {
+		// 来源标识必须与服务名组合，避免不同服务恰好使用相同的本地序号
+		// 时被错误地视为同一条日志。
 		if event.Service == "" {
 			return nil, fmt.Errorf(
 				"compute event ID: service must not be empty",
@@ -74,6 +83,8 @@ func fingerprintInput(
 		}, nil
 	}
 
+	// 没有来源事件标识时，采集器、文件位置、偏移量和日志内容共同构成
+	// 后备指纹。Filebeat 重放同一位置时这些字段保持不变，因此仍能去重。
 	if event.AgentID == "" {
 		return nil, fmt.Errorf(
 			"compute event ID: agent_id must not be empty",

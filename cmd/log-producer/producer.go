@@ -20,6 +20,9 @@ type logEvent struct {
 	LoggedAt      string `json:"logged_at"`
 }
 
+// runProducer 生成采集链路的确定性日志夹具：每轮写一条 stdout/INFO 和
+// 一条文件/WARN 日志，每五轮额外写一条 stderr/ERROR 日志。这个三路比例
+// 是端到端验收计数的一部分，修改时必须同步更新测试与验收标准。
 func runProducer(
 	ctx context.Context,
 	cfg config,
@@ -80,6 +83,8 @@ func runProducer(
 	fileEncoder := json.NewEncoder(file)
 
 	for sequence := int64(1); ; sequence++ {
+		// 每轮开始前先检查取消，保证收到停止信号后不再产生新事件，
+		// 只执行已有文件数据的落盘。
 		select {
 		case <-ctx.Done():
 			return syncLogFile(file)
@@ -103,6 +108,8 @@ func runProducer(
 		}
 
 		if sequence%stderrEveryCycles == 0 {
+			// stderr 使用独立连续序号 1、2、3……，而不是总轮次 5、10、15……，
+			// 使每个输出通道的 source_event_id 都连续且便于验收。
 			stderrSequence := sequence /
 				stderrEveryCycles
 
@@ -139,9 +146,12 @@ func runProducer(
 			return syncLogFile(file)
 		}
 
+		// 使用 Timer 而不是 Sleep，使 SIGTERM 可以立即打断等待。
 		timer := time.NewTimer(cfg.Interval)
 		select {
 		case <-ctx.Done():
+			// Stop 返回 false 表示计时器已经触发；排空通道后再退出，
+			// 避免遗留未消费的计时事件。
 			if !timer.Stop() {
 				<-timer.C
 			}
@@ -194,6 +204,8 @@ func encodeEvent(
 	return nil
 }
 
+// syncLogFile 确保正常完成和信号取消两条退出路径都把文件日志刷新到磁盘，
+// 避免容器关闭时最后一批事件只停留在页缓存中。
 func syncLogFile(file *os.File) error {
 	if err := file.Sync(); err != nil {
 		return fmt.Errorf(

@@ -171,6 +171,8 @@ func parseConfig() (config, error) {
 	return cfg, nil
 }
 
+// waitForEvents 轮询异步采集结果。Filebeat/Logstash 重建期间的短暂网络错误
+// 可以在 deadline 前重试；一旦数据违反唯一性或分布不变量则立即失败。
 func waitForEvents(
 	cfg config,
 ) (verificationResult, error) {
@@ -214,6 +216,7 @@ func waitForEvents(
 
 func newHTTPClient() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// WSL/Windows 的代理环境变量可能劫持 localhost，验收流量必须直连 API。
 	transport.Proxy = nil
 
 	return &http.Client{
@@ -222,6 +225,10 @@ func newHTTPClient() *http.Client {
 	}
 }
 
+// fetchWindow 在一次轮询中读取完整时间窗，并验证跨页 total 不变、ID 不重复
+// 且顺序始终为 logged_at DESC、id DESC；不稳定快照会作为本轮失败重试。
+// API 没有 source_event_id 前缀过滤参数，因此必须先拉完窗口，再在客户端按
+// 本次验收前缀筛选。
 func fetchWindow(
 	client *http.Client,
 	cfg config,
@@ -406,6 +413,8 @@ func buildListURL(cfg config, page int) (string, error) {
 	return endpoint.String(), nil
 }
 
+// verifyItems 对异步采集采用三态判断：少于 expected 时继续等待，多于时立即
+// 失败，恰好时再验证 event_id 唯一性以及 stdout、stderr、file 三路分布。
 func verifyItems(
 	cfg config,
 	items []logItem,
