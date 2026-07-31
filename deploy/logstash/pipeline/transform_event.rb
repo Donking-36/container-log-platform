@@ -1,5 +1,6 @@
 # 将 Filebeat 事件转换成 Gin 内部接收接口要求的字段结构。
 def filter(event)
+  # 必须在删除并重建根字段前做快照，供详情接口完整追溯原始采集事件。
   raw_event = event.to_hash
 
   source_event_id = event.get("[producer][source_event_id]")
@@ -9,9 +10,11 @@ def filter(event)
   service = event.get("[service][name]")
   level = event.get("[producer][level]")
 
+  # 业务 NDJSON 的 message 优先；解析失败或普通文本时回退到 Filebeat message。
   message = event.get("[producer][message]")
   message = event.get("message") if message.nil?
 
+  # 文件输入没有 Docker stream 字段，依靠 input_kind 统一成 file 来源。
   source =
     if event.get("[platform][input_kind]") == "file"
       "file"

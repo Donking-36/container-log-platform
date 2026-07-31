@@ -23,6 +23,7 @@ services:
       MAX_INGEST_BATCH_SIZE: "${MAX_INGEST_BATCH_SIZE:-1000}"
       DEFAULT_PAGE_SIZE: "${DEFAULT_PAGE_SIZE:-20}"
       MAX_PAGE_SIZE: "${MAX_PAGE_SIZE:-100}"
+    # 只向宿主机发布公开查询端口；内部写入端口 8081 仅 ingestion-net 可达。
     ports:
       - "${API_PORT:-8080}:8080"
     volumes:
@@ -53,6 +54,8 @@ services:
     environment:
       INGESTION_API_URL: "http://api:8081/internal/v1/logs/bulk"
       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+    # 配置以只读方式挂载，持久队列单独保存在命名卷中，
+    # 因而重建 Logstash 容器不会丢失尚未确认的事件。
     volumes:
       - ./deploy/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
       - ./deploy/logstash/pipeline:/usr/share/logstash/pipeline:ro
@@ -79,6 +82,8 @@ services:
 
   filebeat:
     image: docker.elastic.co/beats/filebeat:9.4.2
+    # Filebeat 需要 root 读取 Docker socket 与容器 json-file 日志；
+    # 相关宿主机路径均以只读方式挂载，写权限只授予自身 registry 数据卷。
     user: root
     command:
       - --environment
@@ -128,14 +133,16 @@ services:
       - PRODUCER_LOG_PATH=/logs/events.ndjson
       - PRODUCER_INTERVAL=${PRODUCER_INTERVAL:-1s}
       - PRODUCER_CYCLES=${PRODUCER_CYCLES:-0}
-      # A bare key forwards an exported shell value and stays unset otherwise.
+      # 裸键只透传宿主机已导出的值；未导出时保持未设置，让程序生成随机运行 ID。
       - PRODUCER_RUN_ID
     volumes:
       - producer-logs:/logs
+    # 生产器完全断网，强制所有日志只能通过 Filebeat → Logstash → API 进入平台。
     network_mode: none
     depends_on:
       filebeat:
         condition: service_healthy
+    # autodiscover 只采集显式加入白名单的容器，避免混入宿主机其他日志。
     labels:
       com.donking36.container_log_platform.collect: "true"
     logging:
@@ -156,12 +163,14 @@ services:
     restart: "on-failure:5"
     stop_grace_period: 15s
 
+# 三个命名卷分别保存文件日志、Filebeat registry/磁盘队列和 Logstash 持久队列。
 volumes:
   producer-logs:
   filebeat-data:
   logstash-data:
 
 networks:
+  # 内部网络不具备外部出口；只有双网卡 API 同时连接公开与接收边界。
   ingestion-net:
     internal: true
   public-net:

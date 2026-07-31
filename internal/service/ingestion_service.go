@@ -11,12 +11,14 @@ import (
 )
 
 var (
+	// ErrEmptyBatch 表示调用方提交了不包含任何事件的批次。
 	ErrEmptyBatch = errors.New(
 		"ingest batch: events must not be empty",
 	)
 )
 
-// LogBatchInserter描述Service需要的最小存储能力。
+// LogBatchInserter 描述 IngestionService 需要的最小存储能力。
+// 返回值只能是本批次实际新增的记录数，重复项不计入其中。
 type LogBatchInserter interface {
 	InsertBatch(
 		ctx context.Context,
@@ -24,22 +26,23 @@ type LogBatchInserter interface {
 	) (int64, error)
 }
 
-// IngestResult表示一次接收操作的业务结果。
+// IngestResult 表示一次接收操作的业务结果。
+// 恒有 Received = Inserted + Duplicated + Rejected。
 type IngestResult struct {
-	Received   int64
-	Inserted   int64
-	Duplicated int64
-	Rejected   int64
+	Received   int64 // 请求中收到的事件总数。
+	Inserted   int64 // 本次成功新增的事件数。
+	Duplicated int64 // event_id 已存在、幂等跳过的事件数。
+	Rejected   int64 // 因永久字段错误被拒绝的事件数。
 }
 
-// IngestionService组织日志接收业务。
+// IngestionService 组织日志接收业务。
 type IngestionService struct {
 	logs               LogBatchInserter
 	maxLogMessageBytes int64
 	now                func() time.Time
 }
 
-// NewIngestionService创建日志接收Service。
+// NewIngestionService 创建日志接收 Service。
 func NewIngestionService(
 	logs LogBatchInserter,
 	maxLogMessageBytes int64,
@@ -64,7 +67,8 @@ func NewIngestionService(
 	}, nil
 }
 
-// IngestOne接收并幂等存储一条日志。
+// IngestOne 接收并幂等存储一条日志。
+// 成功返回时 Inserted 为 1 表示首次写入，为 0 表示重复提交已被安全忽略。
 func (s *IngestionService) IngestOne(
 	ctx context.Context,
 	input ingestion.EventInput,
@@ -108,7 +112,9 @@ func (s *IngestionService) IngestOne(
 	}, nil
 }
 
-// IngestBatch接收并幂等存储一批日志。
+// IngestBatch 接收并幂等存储一批日志。
+// 永久非法项被逐条计入 Rejected，合法项仍继续入库；存储故障则使整批失败，
+// 让下游根据 event_id 安全重试整批。
 func (s *IngestionService) IngestBatch(
 	ctx context.Context,
 	inputs []ingestion.EventInput,
@@ -118,7 +124,7 @@ func (s *IngestionService) IngestBatch(
 	}
 
 	// 一个批次只读取一次当前时间，
-	// 保证同批事件具有相同的ingested_at。
+	// 保证同批事件具有相同的 ingested_at。
 	ingestedAt := s.now()
 
 	result := IngestResult{
@@ -141,7 +147,7 @@ func (s *IngestionService) IngestBatch(
 			var validationErr *ingestion.ValidationError
 
 			// 永久非法事件不会因为重试而变好，
-			// 因此计入rejected并继续处理其他事件。
+			// 因此计入 rejected 并继续处理其他事件。
 			if errors.As(err, &validationErr) {
 				result.Rejected++
 				continue

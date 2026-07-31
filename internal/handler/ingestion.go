@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LogIngestionService描述Handler需要的最小日志接收能力。
+// LogIngestionService 描述 IngestionHandler 需要的最小日志接收能力。
 type LogIngestionService interface {
 	IngestOne(
 		ctx context.Context,
@@ -28,14 +28,14 @@ type LogIngestionService interface {
 	) (service.IngestResult, error)
 }
 
-// IngestionHandler处理内部日志接收HTTP请求。
+// IngestionHandler 处理只对采集链路开放的日志接收 HTTP 请求。
 type IngestionHandler struct {
 	service             LogIngestionService
 	maxRequestBodyBytes int64
 	maxBatchEvents      int
 }
 
-// NewIngestionHandler创建日志接收Handler。
+// NewIngestionHandler 创建日志接收 Handler。
 func NewIngestionHandler(
 	ingestionService LogIngestionService,
 	maxRequestBodyBytes int64,
@@ -68,7 +68,9 @@ func NewIngestionHandler(
 	}, nil
 }
 
-// IngestOne处理POST /internal/v1/logs。
+// IngestOne 处理 POST /internal/v1/logs。
+// 首次写入返回 201，重复事件和永久非法事件返回 200，临时存储故障返回
+// 503。这样 Logstash 只会重试真正可能恢复的请求。
 func (h *IngestionHandler) IngestOne(c *gin.Context) {
 	markIngestionRequest(c)
 
@@ -107,7 +109,7 @@ func (h *IngestionHandler) IngestOne(c *gin.Context) {
 
 		if errors.As(err, &validationErr) {
 			// 事件已经被成功分类为永久拒绝。
-			// 返回200可避免下游无限重试同一坏事件。
+			// 返回 200 可避免下游无限重试同一坏事件。
 			_ = c.Error(validationErr)
 
 			result := service.IngestResult{
@@ -144,7 +146,9 @@ func (h *IngestionHandler) IngestOne(c *gin.Context) {
 	writeIngestionResponse(c, status, result)
 }
 
-// IngestBatch处理POST /internal/v1/logs/bulk。
+// IngestBatch 处理 POST /internal/v1/logs/bulk。
+// 批次中的永久非法项会计入 rejected，其他合法项仍可成功入库，因此业务上
+// 已完成分类的部分拒绝仍返回 200，避免下游反复重放整个批次。
 func (h *IngestionHandler) IngestBatch(c *gin.Context) {
 	markIngestionRequest(c)
 
@@ -242,6 +246,9 @@ func (h *IngestionHandler) IngestBatch(c *gin.Context) {
 	)
 }
 
+// decodeJSONBody 对所有接收接口实施相同的协议边界：限制请求体大小、
+// 拒绝未知字段，并确保请求体只包含一个 JSON 值。严格解码可以尽早发现
+// Filebeat/Logstash 与 API 的字段契约漂移。
 func decodeJSONBody(
 	c *gin.Context,
 	destination any,
@@ -260,7 +267,7 @@ func decodeJSONBody(
 		return fmt.Errorf("decode request body: %w", err)
 	}
 
-	// 请求体只能包含一个JSON值，拒绝尾随的第二个值。
+	// 请求体只能包含一个 JSON 值，拒绝尾随的第二个值。
 	var extra any
 
 	err := decoder.Decode(&extra)
@@ -280,6 +287,8 @@ func decodeJSONBody(
 	)
 }
 
+// writeJSONDecodeError 将 MaxBytesReader 的超限错误与普通 JSON 语法错误
+// 映射为稳定的 HTTP 状态码和错误码。
 func writeJSONDecodeError(
 	c *gin.Context,
 	err error,

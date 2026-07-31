@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LogStatsService描述StatsHandler需要的最小统计能力。
+// LogStatsService 描述 StatsHandler 需要的最小统计能力。
 type LogStatsService interface {
 	GetLevelStats(
 		ctx context.Context,
@@ -26,12 +26,12 @@ type LogStatsService interface {
 	) (service.ServiceStatsResult, error)
 }
 
-// StatsHandler处理公开日志统计请求。
+// StatsHandler 处理公开日志统计请求。
 type StatsHandler struct {
 	stats LogStatsService
 }
 
-// NewStatsHandler创建日志统计Handler。
+// NewStatsHandler 创建日志统计 Handler。
 func NewStatsHandler(
 	statsService LogStatsService,
 ) (*StatsHandler, error) {
@@ -46,7 +46,7 @@ func NewStatsHandler(
 	}, nil
 }
 
-// GetLevelStats处理GET /api/v1/stats/levels。
+// GetLevelStats 处理 GET /api/v1/stats/levels。
 func (h *StatsHandler) GetLevelStats(c *gin.Context) {
 	input, err := parseStatsRequest(
 		c.Request.URL.RawQuery,
@@ -100,7 +100,7 @@ func (h *StatsHandler) GetLevelStats(c *gin.Context) {
 	})
 }
 
-// GetServiceStats处理GET /api/v1/stats/services。
+// GetServiceStats 处理 GET /api/v1/stats/services。
 func (h *StatsHandler) GetServiceStats(c *gin.Context) {
 	input, err := parseStatsRequest(
 		c.Request.URL.RawQuery,
@@ -196,7 +196,8 @@ func parseStatsInput(
 		return service.StatsInput{}, err
 	}
 
-	// 直接复用Query Handler已有的RFC3339解析函数。
+	// 直接复用 Query Handler 已有的 RFC3339 解析函数，
+	// 确保列表与统计接口接受完全相同的时间格式。
 	start, err := parseOptionalRFC3339(values, "start")
 	if err != nil {
 		return service.StatsInput{}, err
@@ -235,7 +236,7 @@ func validateStatsQueryParameters(
 		allowedSet[name] = struct{}{}
 	}
 
-	// 拒绝统计接口不支持的参数，例如page和page_size。
+	// 拒绝统计接口不支持的参数，例如 page 和 page_size。
 	for name := range values {
 		if _, exists := allowedSet[name]; !exists {
 			return errors.New(

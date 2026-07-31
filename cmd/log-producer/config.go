@@ -19,11 +19,14 @@ type config struct {
 	RunID    string
 	LogPath  string
 	Interval time.Duration
-	Cycles   int64
+	// Cycles 为 0 时持续运行；大于 0 时生成指定轮次后正常退出。
+	Cycles int64
 }
 
 type lookupEnvFunc func(string) (string, bool)
 
+// loadConfig 将环境变量注入抽象为函数，生产环境使用 os.LookupEnv，
+// 测试则可传入确定性配置而不修改进程环境。
 func loadConfig(
 	lookupEnv lookupEnvFunc,
 ) (config, error) {
@@ -33,6 +36,8 @@ func loadConfig(
 		Cycles:   defaultProducerCycles,
 	}
 
+	// 仅当变量未设置时生成随机运行标识；显式设置为空仍是配置错误，
+	// 防止不同运行产生无法追踪或无法稳定去重的事件。
 	if value, exists := lookupEnv("PRODUCER_RUN_ID"); exists {
 		cfg.RunID = strings.TrimSpace(value)
 	} else {

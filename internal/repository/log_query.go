@@ -9,23 +9,29 @@ import (
 	"gorm.io/gorm"
 )
 
+// missingLogError 将驱动层的“记录不存在”转换成不暴露 GORM 的能力接口，
+// 由 Service 再映射为稳定的领域错误。
 type missingLogError struct {
 	err error
 }
 
+// Error 返回底层“记录不存在”错误文本。
 func (e *missingLogError) Error() string {
 	return e.err.Error()
 }
 
+// Unwrap 保留底层错误链，供 errors.Is 和 errors.As 继续匹配。
 func (e *missingLogError) Unwrap() error {
 	return e.err
 }
 
+// NotFound 报告该错误代表目标日志不存在。
 func (e *missingLogError) NotFound() bool {
 	return true
 }
 
-// List按固定条件查询日志，并返回分页前的匹配总数。
+// List 按固定条件查询日志，并返回分页前的匹配总数。
+// 列表结果固定按 logged_at、id 倒序排列，以保证相同时间戳下仍可稳定分页。
 func (r *LogRepository) List(
 	ctx context.Context,
 	query model.LogListQuery,
@@ -45,7 +51,7 @@ func (r *LogRepository) List(
 	logs := make([]model.Log, 0)
 	var total int64
 
-	// Count和当前页共用同一个事务，保证一次响应看到同一读取快照。
+	// Count 和当前页共用同一个事务，保证一次响应看到同一读取快照。
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		countQuery := applyLogFilter(
 			tx.Model(&model.Log{}),
@@ -68,6 +74,8 @@ func (r *LogRepository) List(
 			query.Filter,
 		)
 
+		// 列表页不返回体积较大的原始事件；详情查询仍会读取完整记录。
+		// id 作为第二排序键，解决多条日志 LoggedAt 相同时顺序不确定的问题。
 		if err := dataQuery.
 			Omit("raw_event").
 			Order("logged_at DESC").
@@ -94,7 +102,7 @@ func (r *LogRepository) List(
 	return logs, total, nil
 }
 
-// FindByID按SQLite主键读取一条完整日志。
+// FindByID 按 SQLite 主键读取一条完整日志，包括 RawEvent。
 func (r *LogRepository) FindByID(
 	ctx context.Context,
 	id int64,
@@ -128,6 +136,8 @@ func applyLogFilter(
 	db *gorm.DB,
 	filter model.LogFilter,
 ) *gorm.DB {
+	// 所有值都通过占位符绑定；这里只允许固定字段，不能把客户端输入
+	// 直接拼接进 SQL。
 	if filter.ContainerName != "" {
 		db = db.Where(
 			"container_name = ?",

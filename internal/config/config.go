@@ -8,19 +8,30 @@ import (
 	"time"
 )
 
-// Config 保存API进程运行所需的全部配置。
+// Config 保存 API 进程运行所需的全部配置。
 type Config struct {
-	AppEnv             string
-	PublicAddr         string
-	InternalAddr       string
-	DatabasePath       string
-	LogLevel           string
-	ShutdownTimeout    time.Duration
+	// AppEnv 是写入启动日志的运行环境标签。
+	AppEnv string
+	// PublicAddr 对外提供查询、统计和健康检查接口。
+	PublicAddr string
+	// InternalAddr 只供 Compose 采集链路写入日志。
+	InternalAddr string
+	// DatabasePath 是 SQLite 数据库文件路径。
+	DatabasePath string
+	// LogLevel 是启动时加载并校验的日志级别配置。
+	LogLevel string
+	// ShutdownTimeout 是双 HTTP Server 优雅关闭的最长等待时间。
+	ShutdownTimeout time.Duration
+	// MaxLogMessageBytes 限制单条日志正文的 UTF-8 字节数。
 	MaxLogMessageBytes int64
+	// MaxIngestBodyBytes 限制单次接收请求体的字节数。
 	MaxIngestBodyBytes int64
+	// MaxIngestBatchSize 限制批量接收接口的一次事件数。
 	MaxIngestBatchSize int
-	DefaultPageSize    int
-	MaxPageSize        int
+	// DefaultPageSize 是未提供 page_size 时使用的默认值。
+	DefaultPageSize int
+	// MaxPageSize 是客户端可请求的最大每页记录数。
+	MaxPageSize int
 }
 
 // Default 返回适合本地开发的默认配置。
@@ -52,6 +63,8 @@ func Load() (Config, error) {
 		stringFromEnv("LOG_LEVEL", cfg.LogLevel),
 	)
 
+	// 各解析函数会区分“环境变量未设置”和“设置了非法值”：
+	// 前者使用默认值，后者立即使启动失败，避免悄悄带错配置运行。
 	var err error
 
 	cfg.ShutdownTimeout, err = durationFromEnv(
