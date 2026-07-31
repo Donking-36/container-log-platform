@@ -19,6 +19,7 @@ func TestRunProducerWritesAcceptanceCounts(t *testing.T) {
 		t.TempDir(),
 		"events.ndjson",
 	)
+	// 使用 UTC+8 固定时间，专门验证三个输出通道最终都统一编码为 UTC。
 	loggedAt := time.Date(
 		2026,
 		time.July,
@@ -112,6 +113,8 @@ func TestRunProducerWritesAcceptanceCounts(t *testing.T) {
 		"2026-07-27T00:00:00.123456789Z",
 	)
 
+	// 100 轮应产生 100 stdout + 20 stderr + 100 file，
+	// 共 220 个跨通道不重复的来源事件标识。
 	assertUniqueEventIDs(
 		t,
 		stdoutEvents,

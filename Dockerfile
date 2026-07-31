@@ -15,6 +15,9 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 
+# 项目使用纯 Go SQLite 驱动，因此关闭 CGO 后仍可构建静态 Linux 二进制，
+# Alpine 运行镜像无需额外安装 libc。API 版本通过 ldflags 注入，供启动日志
+# 与发布验收追踪镜像来源。
 RUN mkdir -p /out \
     && CGO_ENABLED=0 GOOS=linux go build \
         -trimpath \
@@ -34,6 +37,8 @@ FROM alpine:${ALPINE_VERSION} AS runtime
 ARG APP_UID=1000
 ARG APP_GID=1000
 
+# UID/GID 可与宿主机绑定挂载目录对齐；运行阶段始终使用非 root 用户，
+# 限制应用进程对容器文件系统的权限。
 RUN addgroup -S -g "${APP_GID}" app \
     && adduser -S -D -H -u "${APP_UID}" -G app app \
     && mkdir -p /app/data /logs \

@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// Go 的 time.Parse 接受部分宽松格式，因此先用正则收紧为项目约定的
+// RFC3339/RFC3339Nano 形式，再交给标准库验证真实日期。
 var strictRFC3339Pattern = regexp.MustCompile(
 	`^[0-9]{4}-(0[1-9]|1[0-2])-` +
 		`(0[1-9]|[12][0-9]|3[01])` +
@@ -18,17 +20,20 @@ var strictRFC3339Pattern = regexp.MustCompile(
 )
 
 // ValidationError 表示事件自身存在永久性字段错误。
-// Handler以后可以通过errors.As识别它并返回HTTP 400。
+// Handler 可以通过 errors.As 识别它，避免对不会因重试而改善的事件反复重试。
 type ValidationError struct {
 	Field  string
 	Reason string
 }
 
+// Error 返回包含字段名和拒绝原因的稳定错误文本。
 func (e *ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Field, e.Reason)
 }
 
-// NormalizeEvent校验并规范化一条外部日志事件。
+// NormalizeEvent 校验并规范化一条外部日志事件。
+// 它只处理事件自身的确定性规则，不访问数据库，也不生成平台 event_id，
+// 因而可以安全地对批次中的每条事件独立执行。
 func NormalizeEvent(
 	input EventInput,
 	maxMessageBytes int64,
@@ -55,7 +60,7 @@ func NormalizeEvent(
 		)
 	}
 
-	// 正文不能TrimSpace，因为空格可能就是日志的真实内容。
+	// 正文不能 TrimSpace，因为空格可能就是日志的真实内容。
 	if input.Message == "" {
 		return NormalizedEvent{}, invalidField(
 			"message",
@@ -63,7 +68,7 @@ func NormalizeEvent(
 		)
 	}
 
-	// Go字符串的len返回UTF-8字节数，符合64 KiB的限制语义。
+	// Go 字符串的 len 返回 UTF-8 字节数，符合 64 KiB 的限制语义。
 	if int64(len(input.Message)) > maxMessageBytes {
 		return NormalizedEvent{}, invalidField(
 			"message",
@@ -115,13 +120,15 @@ func NormalizeEvent(
 		)
 	}
 
+	// 空白可选字符串在领域模型中统一转成 nil；对指针值进行复制，
+	// 防止返回结果继续引用调用方可修改的内存。
 	sourceEventID := optionalString(input.SourceEventID)
 	agentID := strings.TrimSpace(input.AgentID)
 	containerID := optionalString(input.ContainerID)
 	logPath := optionalString(input.LogPath)
 	logOffset := optionalInt64(input.LogOffset)
 
-	// 没有来源事件ID时，只能依靠采集位置计算稳定指纹，
+	// 没有来源事件 ID 时，只能依靠采集位置计算稳定指纹，
 	// 因此这些来源字段必须存在。
 	if sourceEventID == nil {
 		if agentID == "" {

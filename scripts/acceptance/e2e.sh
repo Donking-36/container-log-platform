@@ -44,6 +44,9 @@ compose_acceptance() {
     "$@"
 }
 
+# EXIT trap 在失败时保留诊断证据，只删除本次带标签的夹具容器和安全前缀
+# 临时目录，并在脚本结束后恢复此前正在运行的普通 Compose 项目。
+# PROJECT 与 data_dir 的前缀检查是防误删边界，不能为了简化而移除。
 cleanup() {
   exit_code=$?
   trap - EXIT
@@ -162,6 +165,9 @@ wait_service_healthy() {
   return 1
 }
 
+# 临时无网络容器同时写 Docker stdout/stderr 与共享卷文件日志，并等待
+# Filebeat 完成发现和尾部读取。run_id 白名单同时保护容器名与内嵌 shell
+# 参数，避免验收输入越过命令边界。
 generate_fixture() {
   local run_id="$1"
   local stdout_count="$2"
@@ -270,6 +276,8 @@ generate_fixture() {
   fi
 }
 
+# Compose 日志前缀会随版本变化，因此从每行第一个“{”截取结构化 JSON；
+# 只累计 ingestion 操作的 duplicated 字段，避免混入普通访问日志。
 sum_duplicates_since() {
   local since="$1"
 
@@ -471,6 +479,8 @@ if ! [[ "${PROJECT}" == clp-acceptance-* ]]; then
   exit 1
 fi
 
+# 验收使用独立 Compose 项目和临时数据库。普通项目会被暂时停止并在 EXIT
+# 恢复；若已有其他 collect=true 容器则拒绝运行，保证精确计数不受外部日志影响。
 mkdir -p "${RESULT_DIR}"
 data_dir="$(mktemp -d /tmp/container-log-platform-e2e.XXXXXX)"
 
@@ -511,8 +521,8 @@ compose_acceptance ps \
   | tee "${RESULT_DIR}/${RUN_ID}-compose-ps.txt"
 wait_ready
 
-# The regular producer proves one-click startup and health. Fixed fixtures below
-# provide the exact 1000 -> 1200 -> 1300 acceptance counts.
+# 普通生产器用于证明一键启动和健康状态；随后停止它并使用固定夹具，
+# 才能得到 1000 → 1200 → 1300 的精确验收计数。
 compose_acceptance stop log-producer
 
 producer_volume="$(
@@ -530,9 +540,11 @@ event_prefix="acceptance-${RUN_ID,,}"
 window_start="$(date -u --date='-10 seconds' +%Y-%m-%dT%H:%M:%SZ)"
 window_end="$(date -u --date='+30 minutes' +%Y-%m-%dT%H:%M:%SZ)"
 
+# AT001：首次通过三路采集链路写入 1000 条日志。
 generate_fixture "${event_prefix}-normal" 400 100 500
 verify_events at001-e2e 1000 400 100 500
 
+# 使用完全相同的夹具重放，验证 event_id 幂等且总数仍为 1000。
 replay_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 generate_fixture "${event_prefix}-normal" 400 100 500
 duplicate_count="$(wait_for_duplicates "${replay_started_at}" 1000)"
@@ -545,6 +557,7 @@ compose_acceptance logs \
   >"${RESULT_DIR}/${RUN_ID}-at001-idempotency-api.log"
 verify_events at001-idempotency 1000 400 100 500
 
+# AT002：停止 API，让 Logstash 持久队列堆积后续 200 条事件。
 input_before="$(pipeline_events_in)"
 compose_acceptance stop api
 generate_fixture "${event_prefix}-downstream" 80 20 100
@@ -557,6 +570,8 @@ printf 'events_in_before=%s\nevents_in_after=%s\nqueue_events_before_recreate=%s
   "${queue_count}" \
   | tee "${RESULT_DIR}/${RUN_ID}-at002-queue.txt"
 
+# 停止 Filebeat 后重建 Logstash，验证命名卷中的 PQ 跨容器存活。
+# 新进程的 events.in 指标应从 0 开始，但 queue.events_count 必须仍大于 0。
 compose_acceptance stop filebeat
 compose_acceptance up \
   --detach \
@@ -582,6 +597,7 @@ compose_acceptance exec -T logstash \
   http://127.0.0.1:9600/_node/stats/pipelines/main \
   >"${RESULT_DIR}/${RUN_ID}-at002-after-logstash-recreate.json"
 
+# 恢复 API 后要求队列排空，累计日志数增长到 1200。
 compose_acceptance start api
 wait_ready
 verify_events at002-downstream-recovery 1200 480 120 600
@@ -593,6 +609,7 @@ printf 'events_in_after_recreate=%s\nqueue_after_recreate=%s\nevents_out_after_r
   "${output_after}" \
   | tee -a "${RESULT_DIR}/${RUN_ID}-at002-queue.txt"
 
+# AT003：重建 Filebeat，验证 registry 恢复且只采集新增的 100 条事件。
 compose_acceptance up \
   --detach \
   --no-deps \
@@ -602,6 +619,7 @@ wait_service_healthy filebeat
 generate_fixture "${event_prefix}-after-filebeat" 40 10 50
 verify_events at003-filebeat-recovery 1300 520 130 650
 
+# AT005：重建 API，验证 SQLite 绑定目录中的 1300 条日志仍然存在。
 compose_acceptance up \
   --detach \
   --no-deps \
@@ -610,6 +628,7 @@ compose_acceptance up \
 wait_ready
 verify_events at005-sqlite-persistence 1300 520 130 650
 
+# AT010：同一个 request ID 必须同时出现在响应头、响应体和 API 结构化日志中。
 request_id="${event_prefix}-request"
 headers_file="${RESULT_DIR}/${RUN_ID}-at010-headers.txt"
 body_file="${RESULT_DIR}/${RUN_ID}-at010-body.json"
@@ -642,6 +661,8 @@ if [[ ! -s "${RESULT_DIR}/${RUN_ID}-at010-api.log" ]]; then
   exit 1
 fi
 
+# AT009：在持续查询压力下发送 SIGTERM，要求 API 在宽限期内以 0 退出，
+# 重启后数据仍完整可读。
 (
   end_second=$((SECONDS + 3))
   while [[ "${SECONDS}" -lt "${end_second}" ]]; do

@@ -303,7 +303,7 @@ func usesBaselineParameters(cfg config) bool {
 
 func newHTTPClient(timeout time.Duration) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	// Local acceptance traffic must not be sent through a Windows proxy.
+	// 本地验收流量不能经过 Windows 代理，否则延迟和错误率不再代表 API 本身。
 	transport.Proxy = nil
 	transport.MaxIdleConns = 100
 	transport.MaxIdleConnsPerHost = 100
@@ -357,6 +357,8 @@ func seedRecords(
 	return result, nil
 }
 
+// fixtureEvent 以 10 个容器、4 个级别的确定性分布造数，
+// 为复合过滤查询提供每次运行都相同的选择性。
 func fixtureEvent(index int) eventInput {
 	sequence := index + 1
 	containerNumber := index % 10
@@ -561,6 +563,9 @@ func validateQuery(
 	return nil
 }
 
+// benchmarkQueries 并发运行固定数量的查询 worker 并汇总延迟。
+// results 的容量必须等于 worker 数：主 goroutine 在 Wait 后才消费结果，
+// 足够的缓冲可以避免 worker 发送结果时阻塞并与 Wait 形成死锁。
 func benchmarkQueries(
 	client *http.Client,
 	endpoint string,
@@ -622,6 +627,8 @@ func benchmarkQueries(
 	return output
 }
 
+// runWorker 将完整响应体读取并关闭后才记录一次延迟，这既把传输耗时纳入
+// 指标，也允许 HTTP keep-alive 连接被后续请求复用。
 func runWorker(
 	client *http.Client,
 	endpoint string,
@@ -661,6 +668,8 @@ func runWorker(
 	return result
 }
 
+// percentile 使用 nearest-rank（向上取整）算法计算百分位，不做插值；
+// sortedValues 必须已经按升序排列。
 func percentile(sortedValues []float64, quantile float64) float64 {
 	if len(sortedValues) == 0 {
 		return 0

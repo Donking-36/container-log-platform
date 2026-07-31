@@ -65,6 +65,8 @@ fi
 
 data_dir="$(mktemp -d /tmp/container-log-platform-performance.XXXXXX)"
 
+# 性能验收临时发布内部 8081 端口，仅用于确定性批量造数；
+# 正常 Compose 从不向宿主机暴露该写入接口。
 container_id="$(
   docker run \
   --detach \
@@ -103,6 +105,7 @@ if [[ "${ready}" != "1" ]]; then
   exit 1
 fi
 
+# 保存代码版本、机器和容器运行时快照，使性能结果可以复现和解释。
 environment_file="${RESULT_DIR}/${RUN_ID}-environment.txt"
 result_file="${RESULT_DIR}/${RUN_ID}-query-performance.json"
 
@@ -129,6 +132,7 @@ result_file="${RESULT_DIR}/${RUN_ID}-query-performance.json"
 
 benchmark_args=()
 if [[ "${PERF_ALLOW_NON_BASELINE:-0}" == "1" ]]; then
+  # 非基线参数只用于探索；Go 基准程序不会把结果标记为正式验收通过。
   benchmark_args+=("-allow-non-baseline")
 fi
 

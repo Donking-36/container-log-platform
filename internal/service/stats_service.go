@@ -11,7 +11,7 @@ import (
 	"github.com/Donking-36/container-log-platform/internal/model"
 )
 
-// LogStatsReader描述StatsService需要的最小统计读取能力。
+// LogStatsReader 描述 StatsService 需要的最小统计读取能力。
 type LogStatsReader interface {
 	CountByLevel(
 		ctx context.Context,
@@ -24,7 +24,7 @@ type LogStatsReader interface {
 	) ([]model.LogServiceCount, error)
 }
 
-// StatsInput描述日志统计接口支持的过滤条件。
+// StatsInput 描述日志统计接口支持的过滤条件。
 type StatsInput struct {
 	ContainerName string
 	Service       string
@@ -33,31 +33,31 @@ type StatsInput struct {
 	End           *time.Time
 }
 
-// LevelStat表示一个日志级别的数量和占比。
+// LevelStat 表示一个日志级别的数量和占比。
 type LevelStat struct {
 	Level      string
 	Count      int64
 	Percentage float64
 }
 
-// LevelStatsResult表示日志级别统计结果。
+// LevelStatsResult 表示日志级别统计结果。
 type LevelStatsResult struct {
 	Stats []LevelStat
 	Total int64
 }
 
-// ServiceStatsResult表示服务统计结果。
+// ServiceStatsResult 表示服务统计结果。
 type ServiceStatsResult struct {
 	Stats []model.LogServiceCount
 	Total int64
 }
 
-// StatsService组织日志统计业务。
+// StatsService 组织日志统计业务。
 type StatsService struct {
 	logs LogStatsReader
 }
 
-// NewStatsService创建日志统计Service。
+// NewStatsService 创建日志统计 Service。
 func NewStatsService(
 	logs LogStatsReader,
 ) (*StatsService, error) {
@@ -72,7 +72,7 @@ func NewStatsService(
 	}, nil
 }
 
-// GetLevelStats查询日志级别统计，并计算每个级别的占比。
+// GetLevelStats 查询日志级别统计，并计算每个级别的占比。
 func (s *StatsService) GetLevelStats(
 	ctx context.Context,
 	input StatsInput,
@@ -113,7 +113,7 @@ func (s *StatsService) GetLevelStats(
 	}, nil
 }
 
-// GetServiceStats查询按服务分组的日志数量。
+// GetServiceStats 查询按服务分组的日志数量。
 func (s *StatsService) GetServiceStats(
 	ctx context.Context,
 	input StatsInput,
@@ -136,7 +136,7 @@ func (s *StatsService) GetServiceStats(
 		total += item.Count
 	}
 
-	// 返回新的切片，避免调用方修改Repository返回的切片。
+	// 返回新的切片，避免调用方修改 Repository 返回的切片。
 	stats := append([]model.LogServiceCount{}, counts...)
 
 	return ServiceStatsResult{

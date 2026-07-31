@@ -1,10 +1,14 @@
 api.http.host: "0.0.0.0"
 api.http.port: 9600
 
+# 单 worker 使事件顺序和 SQLite 写入压力保持可预测。
 pipeline.workers: 1
 pipeline.batch.size: 50
 pipeline.ecs_compatibility: v8
 
+# 持久队列是 Filebeat 与 API 之间的第二层故障缓冲。
+# checkpoint.writes=1 用更多 I/O 换取更细的恢复粒度；
+# queue.drain=false 表示关闭时不等待清空，下次从 logstash-data 卷继续恢复。
 queue.type: persisted
 queue.max_bytes: 256mb
 queue.checkpoint.writes: 1

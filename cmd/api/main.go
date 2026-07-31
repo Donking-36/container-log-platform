@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// version 默认标记本地开发构建，发布镜像通过 -ldflags 在编译时注入版本号。
 var version = "dev"
 
 func main() {
@@ -25,9 +26,12 @@ func main() {
 	os.Exit(run(logger))
 }
 
+// run 是 API 进程的组合根：按 Config → Repository → Service → Handler →
+// Router → Server 的依赖方向完成装配。返回退出码而不是在中途调用 os.Exit，
+// 使数据库关闭等 defer 在进程退出前得到执行。
 func run(logger *slog.Logger) int {
-	// 关闭Gin自带的非结构化调试输出，
-	// 运行日志统一交给slog中间件。
+	// 关闭 Gin 自带的非结构化调试输出，
+	// 运行日志统一交给 slog 中间件。
 	gin.SetMode(gin.ReleaseMode)
 
 	cfg, err := config.Load()
@@ -203,6 +207,8 @@ func run(logger *slog.Logger) int {
 		logger,
 	)
 
+	// SIGINT 支持本地 Ctrl+C，SIGTERM 支持 Docker stop；
+	// 两者统一取消上下文并进入 Servers 的优雅关闭流程。
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,

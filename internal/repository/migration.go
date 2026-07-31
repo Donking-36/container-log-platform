@@ -9,6 +9,7 @@ import (
 )
 
 // Migrate 创建或更新当前版本所需的数据库结构。
+// 当前 MVP 仅执行向前兼容的 AutoMigrate，不承担破坏性回滚。
 func Migrate(db *gorm.DB) error {
 	if db == nil {
 		return errors.New(

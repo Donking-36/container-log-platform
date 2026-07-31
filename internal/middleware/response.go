@@ -6,19 +6,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ErrorDetail表示统一错误响应中的错误信息。
+// ErrorDetail 表示统一错误响应中的错误信息。
 type ErrorDetail struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-// ErrorResponse表示API统一错误响应。
+// ErrorResponse 表示 API 统一错误响应。
 type ErrorResponse struct {
 	Error     ErrorDetail `json:"error"`
 	RequestID string      `json:"request_id"`
 }
 
-// WriteError写入包含request ID的统一JSON错误响应。
+// WriteError 写入包含 request ID 的统一 JSON 错误响应。
+// 同时把稳定的 error_code 附加到请求日志，方便按错误类型聚合排查。
 func WriteError(
 	c *gin.Context,
 	status int,

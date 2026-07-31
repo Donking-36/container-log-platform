@@ -18,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// LogQueryService描述Handler需要的最小日志查询能力。
+// LogQueryService 描述 QueryHandler 需要的最小日志查询能力。
 type LogQueryService interface {
 	ListLogs(
 		ctx context.Context,
@@ -31,12 +31,12 @@ type LogQueryService interface {
 	) (model.Log, error)
 }
 
-// QueryHandler处理公开日志查询HTTP请求。
+// QueryHandler 处理公开日志查询 HTTP 请求。
 type QueryHandler struct {
 	service LogQueryService
 }
 
-// NewQueryHandler创建公开查询Handler。
+// NewQueryHandler 创建公开查询 Handler。
 func NewQueryHandler(
 	queryService LogQueryService,
 ) (*QueryHandler, error) {
@@ -51,8 +51,11 @@ func NewQueryHandler(
 	}, nil
 }
 
-// ListLogs处理GET /api/v1/logs。
+// ListLogs 处理 GET /api/v1/logs。
+// URL 解析和参数白名单在 Handler 完成，分页默认值、时间范围等业务规则
+// 交给 Service 统一处理。
 func (h *QueryHandler) ListLogs(c *gin.Context) {
+	// ParseQuery 会识别非法百分号编码，避免把畸形查询字符串当成空值。
 	values, err := url.ParseQuery(c.Request.URL.RawQuery)
 	if err != nil {
 		middleware.WriteError(
@@ -107,7 +110,8 @@ func (h *QueryHandler) ListLogs(c *gin.Context) {
 	})
 }
 
-// GetLog处理GET /api/v1/logs/:id。
+// GetLog 处理 GET /api/v1/logs/:id。
+// 与列表接口不同，详情会返回用于问题追溯的完整 raw_event。
 func (h *QueryHandler) GetLog(c *gin.Context) {
 	id, err := parsePositiveLogID(c.Param("id"))
 	if err != nil {
@@ -226,6 +230,8 @@ func newLogDetailData(
 ) (logDetailData, error) {
 	var rawEvent json.RawMessage
 
+	// RawEvent 在数据库中以文本保存；返回前再次验证，防止历史坏数据
+	// 被当作 JSON 直接嵌入响应并破坏整个响应体。
 	if logEntry.RawEvent != nil {
 		encoded := []byte(*logEntry.RawEvent)
 		if !json.Valid(encoded) {
@@ -255,6 +261,8 @@ func newLogDetailData(
 	}, nil
 }
 
+// parseListLogsInput 只负责把 HTTP 字符串转换为带类型的 Service 输入，
+// 不在传输层复制分页上限、级别映射等业务规则。
 func parseListLogsInput(
 	values url.Values,
 ) (service.ListLogsInput, error) {
@@ -297,6 +305,8 @@ func parseListLogsInput(
 }
 
 func validateListQueryParameters(values url.Values) error {
+	// 同时拒绝未知参数和重复参数，避免客户端拼写错误或参数污染被静默忽略。
+	// 固定白名单也使 API 契约保持可审查。
 	allowed := []string{
 		"container",
 		"service",
@@ -397,6 +407,8 @@ func parsePositiveLogID(value string) (int64, error) {
 	return id, nil
 }
 
+// writeQueryServiceError 集中维护领域错误到公开 HTTP 契约的映射，
+// 防止 Repository 或内部错误文本泄漏给客户端。
 func writeQueryServiceError(
 	c *gin.Context,
 	err error,
